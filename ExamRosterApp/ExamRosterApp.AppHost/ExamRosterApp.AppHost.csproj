@@ -1,0 +1,1 @@
+<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><ProjectReference Include="..\ExamRosterApp.ServiceDefaults\ExamRosterApp.ServiceDefaults.csproj" /><ProjectReference Include="..\ExamRosterApp.Desktop\ExamRosterApp.Desktop.csproj" /></ItemGroup><ItemGroup><PackageReference Include="Aspire.Hosting.AppHost" Version="8.2.2" /></ItemGroup></Project>
