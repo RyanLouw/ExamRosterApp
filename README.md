@@ -25,3 +25,8 @@ Local-first school exam duty roster application (WPF + .NET 8 + EF Core + SQL Se
 ## Open in IDE
 - Open `ExamRosterApp.sln` from the repository root.
 - You should see all projects, including `ExamRosterApp.AppHost` (Aspire host) in Solution Explorer.
+
+
+## Compatibility note
+- `ExamRosterApp.AppHost` targets `net8.0-windows` so it can reference and orchestrate the WPF desktop project (`net8.0-windows`) without TFM mismatch errors.
+- The solution uses NuGet-based Aspire hosting (`Aspire.Hosting.AppHost` package) and does not require the deprecated Aspire workload SDK.
