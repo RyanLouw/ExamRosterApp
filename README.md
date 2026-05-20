@@ -30,3 +30,9 @@ Local-first school exam duty roster application (WPF + .NET 8 + EF Core + SQL Se
 ## Compatibility note
 - `ExamRosterApp.AppHost` targets `net8.0-windows` so it can reference and orchestrate the WPF desktop project (`net8.0-windows`) without TFM mismatch errors.
 - The solution uses NuGet-based Aspire hosting (`Aspire.Hosting.AppHost` package) and does not require the deprecated Aspire workload SDK.
+
+
+## Aspire SDK note
+- This repo uses `Microsoft.NET.Sdk` + NuGet package `Aspire.Hosting.AppHost` only.
+- It does **not** use the deprecated Aspire Workload SDK.
+- If your local tooling still shows a workload deprecation warning, update Visual Studio/.NET SDK to the latest .NET 8 servicing release and restore packages again (`dotnet restore`).
