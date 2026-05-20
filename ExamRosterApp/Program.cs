@@ -1,7 +1,6 @@
-using System.Globalization;
 using System.Text;
-using ExamRosterApp.Rostering;
 using System.Windows.Forms;
+using ExamRosterApp.Rostering;
 
 namespace ExamRosterApp;
 
@@ -17,64 +16,113 @@ internal static class Program
 
 public sealed class RosterForm : Form
 {
-    private readonly TextBox _teachersBox = new() { Multiline = true, ScrollBars = ScrollBars.Both, Width = 560, Height = 180 };
-    private readonly TextBox _slotsBox = new() { Multiline = true, ScrollBars = ScrollBars.Both, Width = 560, Height = 180 };
-    private readonly Button _generateButton = new() { Text = "Generate roster", Width = 160, Height = 36 };
-    private readonly TextBox _outputBox = new() { Multiline = true, ScrollBars = ScrollBars.Both, Width = 560, Height = 220, ReadOnly = true };
+    private readonly DataGridView _teachersGrid = new();
+    private readonly DataGridView _slotsGrid = new();
+    private readonly TextBox _outputBox = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, Dock = DockStyle.Fill };
 
     public RosterForm()
     {
         Text = "Exam Duty Scheduler";
-        Width = 620;
-        Height = 730;
+        Width = 1200;
+        Height = 800;
 
-        var layout = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            AutoScroll = true,
-            Padding = new Padding(12)
-        };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1 };
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 40));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 40));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 20));
 
-        layout.Controls.Add(new Label { Text = "Teachers CSV: Id,FullName,CanWorkMorning,CanWorkAfternoon,HomeSubject,Unavailable", AutoSize = true });
-        layout.Controls.Add(new Label { Text = "Unavailable format: yyyy-MM-dd|HH:mm-HH:mm;yyyy-MM-dd|HH:mm-HH:mm", AutoSize = true });
-        layout.Controls.Add(_teachersBox);
+        var buttonPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight };
+        var addTeacherButton = new Button { Text = "Add Teacher", AutoSize = true };
+        var addSlotButton = new Button { Text = "Add Exam Slot", AutoSize = true };
+        var generateButton = new Button { Text = "Generate Roster", AutoSize = true };
+        var clearButton = new Button { Text = "Clear Output", AutoSize = true };
 
-        layout.Controls.Add(new Label { Text = "Exam Slots CSV: Id,Date,Start,End,Shift(Morning/Afternoon),Grade,Subject,Venue,TeachersRequired", AutoSize = true, Padding = new Padding(0, 10, 0, 0) });
-        layout.Controls.Add(_slotsBox);
+        addTeacherButton.Click += (_, _) => _teachersGrid.Rows.Add();
+        addSlotButton.Click += (_, _) => _slotsGrid.Rows.Add();
+        generateButton.Click += (_, _) => GenerateRoster();
+        clearButton.Click += (_, _) => _outputBox.Clear();
 
-        _generateButton.Click += (_, _) => GenerateRoster();
-        layout.Controls.Add(_generateButton);
+        buttonPanel.Controls.Add(addTeacherButton);
+        buttonPanel.Controls.Add(addSlotButton);
+        buttonPanel.Controls.Add(generateButton);
+        buttonPanel.Controls.Add(clearButton);
+        root.Controls.Add(buttonPanel, 0, 0);
 
-        layout.Controls.Add(new Label { Text = "Generated roster", AutoSize = true, Padding = new Padding(0, 10, 0, 0) });
-        layout.Controls.Add(_outputBox);
+        ConfigureTeacherGrid();
+        ConfigureSlotGrid();
 
-        Controls.Add(layout);
+        var teacherGroup = new GroupBox { Text = "Teachers", Dock = DockStyle.Fill };
+        teacherGroup.Controls.Add(_teachersGrid);
+        root.Controls.Add(teacherGroup, 0, 1);
 
+        var slotGroup = new GroupBox { Text = "Exam Slots", Dock = DockStyle.Fill };
+        slotGroup.Controls.Add(_slotsGrid);
+        root.Controls.Add(slotGroup, 0, 2);
+
+        var outputGroup = new GroupBox { Text = "Generated Roster", Dock = DockStyle.Fill };
+        outputGroup.Controls.Add(_outputBox);
+        root.Controls.Add(outputGroup, 0, 3);
+
+        Controls.Add(root);
         SeedSampleData();
+    }
+
+    private void ConfigureTeacherGrid()
+    {
+        _teachersGrid.Dock = DockStyle.Fill;
+        _teachersGrid.AllowUserToAddRows = true;
+        _teachersGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        _teachersGrid.Columns.Add("Id", "Id");
+        _teachersGrid.Columns.Add("FullName", "Teacher Name");
+        _teachersGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "CanWorkMorning", HeaderText = "Can Work Morning" });
+        _teachersGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "CanWorkAfternoon", HeaderText = "Can Work Afternoon" });
+        _teachersGrid.Columns.Add("HomeSubject", "Home Subject");
+        _teachersGrid.Columns.Add("Unavailable", "Unavailable (yyyy-MM-dd|HH:mm-HH:mm;...) ");
+    }
+
+    private void ConfigureSlotGrid()
+    {
+        _slotsGrid.Dock = DockStyle.Fill;
+        _slotsGrid.AllowUserToAddRows = true;
+        _slotsGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        _slotsGrid.Columns.Add("Id", "Id");
+        _slotsGrid.Columns.Add("Date", "Date (yyyy-MM-dd)");
+        _slotsGrid.Columns.Add("StartTime", "Start (HH:mm)");
+        _slotsGrid.Columns.Add("EndTime", "End (HH:mm)");
+
+        var shiftColumn = new DataGridViewComboBoxColumn
+        {
+            Name = "ShiftType",
+            HeaderText = "Shift",
+            DataSource = Enum.GetNames(typeof(ShiftType))
+        };
+        _slotsGrid.Columns.Add(shiftColumn);
+
+        _slotsGrid.Columns.Add("Grade", "Grade");
+        _slotsGrid.Columns.Add("Subject", "Subject");
+        _slotsGrid.Columns.Add("Venue", "Venue");
+        _slotsGrid.Columns.Add("TeachersRequired", "Teachers Required");
     }
 
     private void SeedSampleData()
     {
-        _teachersBox.Text = string.Join(Environment.NewLine,
-            "1,Mrs Smith,true,true,Maths,2026-06-01|10:00-11:00",
-            "2,Mr Jones,true,false,,-",
-            "3,Mrs Botha,false,true,,-",
-            "4,Ms Patel,true,true,,-");
+        _teachersGrid.Rows.Add(1, "Mrs Smith", true, true, "Maths", "2026-06-01|10:00-11:00");
+        _teachersGrid.Rows.Add(2, "Mr Jones", true, false, "", "-");
+        _teachersGrid.Rows.Add(3, "Mrs Botha", false, true, "", "-");
+        _teachersGrid.Rows.Add(4, "Ms Patel", true, true, "", "-");
 
-        _slotsBox.Text = string.Join(Environment.NewLine,
-            "1,2026-06-01,08:00,10:00,Morning,Grade 8,Maths,Hall A,2",
-            "2,2026-06-01,08:00,10:00,Morning,Grade 9,English,Room 12,1",
-            "3,2026-06-01,13:00,15:00,Afternoon,Grade 10,Science,Hall B,2");
+        _slotsGrid.Rows.Add(1, "2026-06-01", "08:00", "10:00", "Morning", "Grade 8", "Maths", "Hall A", 2);
+        _slotsGrid.Rows.Add(2, "2026-06-01", "08:00", "10:00", "Morning", "Grade 9", "English", "Room 12", 1);
+        _slotsGrid.Rows.Add(3, "2026-06-01", "13:00", "15:00", "Afternoon", "Grade 10", "Science", "Hall B", 2);
     }
 
     private void GenerateRoster()
     {
         try
         {
-            var teachers = ParseTeachers(_teachersBox.Text);
-            var slots = ParseSlots(_slotsBox.Text);
+            var teachers = ReadTeachers();
+            var slots = ReadSlots();
 
             var generator = new RosterGenerator();
             var result = generator.GenerateRoster(teachers, slots);
@@ -110,32 +158,61 @@ public sealed class RosterForm : Form
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Input error: {ex.Message}", "Invalid input", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show($"Please fix input data: {ex.Message}", "Invalid input", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
-    private static List<Teacher> ParseTeachers(string csv)
+    private List<Teacher> ReadTeachers()
     {
-        var teachers = new List<Teacher>();
-        var lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        foreach (var line in lines)
+        var list = new List<Teacher>();
+        foreach (DataGridViewRow row in _teachersGrid.Rows)
         {
-            var p = line.Split(',', StringSplitOptions.TrimEntries);
-            if (p.Length < 6) throw new InvalidOperationException($"Teacher row needs 6 columns: {line}");
-
-            teachers.Add(new Teacher
+            if (row.IsNewRow || row.Cells["Id"].Value is null) continue;
+            list.Add(new Teacher
             {
-                Id = int.Parse(p[0], CultureInfo.InvariantCulture),
-                FullName = p[1],
-                CanWorkMorning = bool.Parse(p[2]),
-                CanWorkAfternoon = bool.Parse(p[3]),
-                HomeSubject = string.IsNullOrWhiteSpace(p[4]) ? null : p[4],
-                UnavailableSlots = ParseUnavailable(p[5])
+                Id = ParseInt(row, "Id"),
+                FullName = ReadString(row, "FullName"),
+                CanWorkMorning = ParseBool(row, "CanWorkMorning"),
+                CanWorkAfternoon = ParseBool(row, "CanWorkAfternoon"),
+                HomeSubject = EmptyToNull(ReadString(row, "HomeSubject")),
+                UnavailableSlots = ParseUnavailable(ReadString(row, "Unavailable"))
             });
         }
-
-        return teachers;
+        return list;
     }
+
+    private List<ExamDutySlot> ReadSlots()
+    {
+        var list = new List<ExamDutySlot>();
+        foreach (DataGridViewRow row in _slotsGrid.Rows)
+        {
+            if (row.IsNewRow || row.Cells["Id"].Value is null) continue;
+            list.Add(new ExamDutySlot
+            {
+                Id = ParseInt(row, "Id"),
+                Date = DateOnly.Parse(ReadString(row, "Date")),
+                StartTime = TimeOnly.Parse(ReadString(row, "StartTime")),
+                EndTime = TimeOnly.Parse(ReadString(row, "EndTime")),
+                ShiftType = Enum.Parse<ShiftType>(ReadString(row, "ShiftType"), true),
+                Grade = ReadString(row, "Grade"),
+                Subject = ReadString(row, "Subject"),
+                Venue = ReadString(row, "Venue"),
+                TeachersRequired = ParseInt(row, "TeachersRequired")
+            });
+        }
+        return list;
+    }
+
+    private static string ReadString(DataGridViewRow row, string column)
+        => row.Cells[column].Value?.ToString()?.Trim() ?? string.Empty;
+
+    private static int ParseInt(DataGridViewRow row, string column)
+        => int.Parse(ReadString(row, column));
+
+    private static bool ParseBool(DataGridViewRow row, string column)
+        => row.Cells[column].Value is bool b ? b : bool.Parse(ReadString(row, column));
+
+    private static string? EmptyToNull(string value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     private static List<UnavailableSlot> ParseUnavailable(string value)
     {
@@ -145,46 +222,15 @@ public sealed class RosterForm : Form
         foreach (var part in value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var pair = part.Split('|', StringSplitOptions.TrimEntries);
-            if (pair.Length != 2) throw new InvalidOperationException($"Invalid unavailable slot: {part}");
-
             var times = pair[1].Split('-', StringSplitOptions.TrimEntries);
-            if (times.Length != 2) throw new InvalidOperationException($"Invalid unavailable times: {pair[1]}");
-
             list.Add(new UnavailableSlot
             {
-                Date = DateOnly.Parse(pair[0], CultureInfo.InvariantCulture),
-                StartTime = TimeOnly.Parse(times[0], CultureInfo.InvariantCulture),
-                EndTime = TimeOnly.Parse(times[1], CultureInfo.InvariantCulture)
+                Date = DateOnly.Parse(pair[0]),
+                StartTime = TimeOnly.Parse(times[0]),
+                EndTime = TimeOnly.Parse(times[1])
             });
         }
 
         return list;
-    }
-
-    private static List<ExamDutySlot> ParseSlots(string csv)
-    {
-        var slots = new List<ExamDutySlot>();
-        var lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        foreach (var line in lines)
-        {
-            var p = line.Split(',', StringSplitOptions.TrimEntries);
-            if (p.Length < 9) throw new InvalidOperationException($"Exam slot row needs 9 columns: {line}");
-
-            slots.Add(new ExamDutySlot
-            {
-                Id = int.Parse(p[0], CultureInfo.InvariantCulture),
-                Date = DateOnly.Parse(p[1], CultureInfo.InvariantCulture),
-                StartTime = TimeOnly.Parse(p[2], CultureInfo.InvariantCulture),
-                EndTime = TimeOnly.Parse(p[3], CultureInfo.InvariantCulture),
-                ShiftType = Enum.Parse<ShiftType>(p[4], true),
-                Grade = p[5],
-                Subject = p[6],
-                Venue = p[7],
-                TeachersRequired = int.Parse(p[8], CultureInfo.InvariantCulture)
-            });
-        }
-
-        return slots;
     }
 }
