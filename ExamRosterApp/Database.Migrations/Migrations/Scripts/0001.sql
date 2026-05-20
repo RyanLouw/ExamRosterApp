@@ -21,6 +21,28 @@ BEGIN
     );
 END
 
+IF OBJECT_ID('tr.Teacher','U') IS NOT NULL
+AND COL_LENGTH('tr.Teacher','TeacherGroupId') IS NULL
+BEGIN
+    ALTER TABLE tr.Teacher
+    ADD TeacherGroupId INT NOT NULL
+        CONSTRAINT DF_Teacher_TeacherGroupId DEFAULT ((1));
+END
+
+IF OBJECT_ID('tr.Teacher','U') IS NOT NULL
+AND COL_LENGTH('tr.Teacher','MinDutyMinutes') IS NULL
+BEGIN
+    ALTER TABLE tr.Teacher
+    ADD MinDutyMinutes INT NULL;
+END
+
+IF OBJECT_ID('tr.Teacher','U') IS NOT NULL
+AND COL_LENGTH('tr.Teacher','MaxDutyMinutes') IS NULL
+BEGIN
+    ALTER TABLE tr.Teacher
+    ADD MaxDutyMinutes INT NULL;
+END
+
 IF NOT EXISTS (
     SELECT 1
     FROM sys.default_constraints dc
@@ -32,6 +54,58 @@ BEGIN
     ALTER TABLE tr.AdminAuditLog
     ADD CONSTRAINT DF_AdminAuditLog_ChangedOn
     DEFAULT (SYSUTCDATETIME()) FOR ChangedOn;
+END
+
+IF OBJECT_ID('tr.Teacher','U') IS NOT NULL
+AND NOT EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = 'CK_Teacher_TeacherGroupId'
+      AND parent_object_id = OBJECT_ID('tr.Teacher')
+)
+BEGIN
+    ALTER TABLE tr.Teacher
+    ADD CONSTRAINT CK_Teacher_TeacherGroupId
+    CHECK (TeacherGroupId IN (1, 2, 3));
+END
+
+IF OBJECT_ID('tr.Teacher','U') IS NOT NULL
+AND NOT EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = 'CK_Teacher_MinDutyMinutes'
+      AND parent_object_id = OBJECT_ID('tr.Teacher')
+)
+BEGIN
+    ALTER TABLE tr.Teacher
+    ADD CONSTRAINT CK_Teacher_MinDutyMinutes
+    CHECK (MinDutyMinutes IS NULL OR MinDutyMinutes >= 0);
+END
+
+IF OBJECT_ID('tr.Teacher','U') IS NOT NULL
+AND NOT EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = 'CK_Teacher_MaxDutyMinutes'
+      AND parent_object_id = OBJECT_ID('tr.Teacher')
+)
+BEGIN
+    ALTER TABLE tr.Teacher
+    ADD CONSTRAINT CK_Teacher_MaxDutyMinutes
+    CHECK (MaxDutyMinutes IS NULL OR MaxDutyMinutes >= 0);
+END
+
+IF OBJECT_ID('tr.Teacher','U') IS NOT NULL
+AND NOT EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = 'CK_Teacher_MinMaxDutyMinutes'
+      AND parent_object_id = OBJECT_ID('tr.Teacher')
+)
+BEGIN
+    ALTER TABLE tr.Teacher
+    ADD CONSTRAINT CK_Teacher_MinMaxDutyMinutes
+    CHECK (MinDutyMinutes IS NULL OR MaxDutyMinutes IS NULL OR MaxDutyMinutes >= MinDutyMinutes);
 END
 
 
@@ -50,6 +124,9 @@ BEGIN
 
         CanWorkMorning BIT NOT NULL,
         CanWorkAfternoon BIT NOT NULL,
+        TeacherGroupId INT NOT NULL,
+        MinDutyMinutes INT NULL,
+        MaxDutyMinutes INT NULL,
 
         IsActive BIT NOT NULL,
 
@@ -59,6 +136,20 @@ BEGIN
         UpdatedOn DATETIME2(0) NULL,
         UpdatedBy VARCHAR(100) NULL
     );
+END
+
+IF OBJECT_ID('tr.ExamDutySlot','U') IS NOT NULL
+AND COL_LENGTH('tr.ExamDutySlot','LearnerCount') IS NULL
+BEGIN
+    ALTER TABLE tr.ExamDutySlot
+    ADD LearnerCount INT NULL;
+END
+
+IF OBJECT_ID('tr.ExamDutySlot','U') IS NOT NULL
+AND COL_LENGTH('tr.ExamDutySlot','LearnersPerInvigilator') IS NULL
+BEGIN
+    ALTER TABLE tr.ExamDutySlot
+    ADD LearnersPerInvigilator INT NULL;
 END
 
 IF COL_LENGTH('tr.Teacher','CanWorkMorning') IS NOT NULL
@@ -73,6 +164,32 @@ BEGIN
     ALTER TABLE tr.Teacher
     ADD CONSTRAINT DF_Teacher_CanWorkMorning
     DEFAULT ((1)) FOR CanWorkMorning;
+END
+
+IF OBJECT_ID('tr.ExamDutySlot','U') IS NOT NULL
+AND NOT EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = 'CK_ExamDutySlot_LearnerCount'
+      AND parent_object_id = OBJECT_ID('tr.ExamDutySlot')
+)
+BEGIN
+    ALTER TABLE tr.ExamDutySlot
+    ADD CONSTRAINT CK_ExamDutySlot_LearnerCount
+    CHECK (LearnerCount IS NULL OR LearnerCount > 0);
+END
+
+IF OBJECT_ID('tr.ExamDutySlot','U') IS NOT NULL
+AND NOT EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = 'CK_ExamDutySlot_LearnersPerInvigilator'
+      AND parent_object_id = OBJECT_ID('tr.ExamDutySlot')
+)
+BEGIN
+    ALTER TABLE tr.ExamDutySlot
+    ADD CONSTRAINT CK_ExamDutySlot_LearnersPerInvigilator
+    CHECK (LearnersPerInvigilator IS NULL OR LearnersPerInvigilator > 0);
 END
 
 IF COL_LENGTH('tr.Teacher','CanWorkAfternoon') IS NOT NULL
@@ -246,6 +363,8 @@ BEGIN
         ShiftTypeId INT NOT NULL,
 
         TeachersRequired INT NOT NULL,
+        LearnerCount INT NULL,
+        LearnersPerInvigilator INT NULL,
 
         IsActive BIT NOT NULL,
 

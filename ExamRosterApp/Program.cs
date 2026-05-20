@@ -1,4 +1,5 @@
 using System.Text;
+using System.Data.SqlClient;
 using System.Windows.Forms;
 using ExamRosterApp.Rostering;
 
@@ -65,7 +66,62 @@ public sealed class RosterForm : Form
         root.Controls.Add(outputGroup, 0, 3);
 
         Controls.Add(root);
-        SeedSampleData();
+        LoadTeachersFromDatabaseOrSeed();
+    }
+
+    private void LoadTeachersFromDatabaseOrSeed()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("EXAMROSTER_DB_CONNECTION");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            SeedSampleData();
+            return;
+        }
+
+        try
+        {
+            using var connection = new SqlConnection(connectionString);
+            connection.Open();
+
+            using var command = connection.CreateCommand();
+            command.CommandText = @"
+SELECT TeacherId, FullName, CanWorkMorning, CanWorkAfternoon, IsActive,
+       ISNULL(TeacherGroupId, 1) AS TeacherGroupId,
+       MinDutyMinutes, MaxDutyMinutes
+FROM tr.Teacher
+WHERE IsActive = 1
+ORDER BY FullName;";
+
+            using var reader = command.ExecuteReader();
+            var loadedAny = false;
+
+            while (reader.Read())
+            {
+                loadedAny = true;
+                var groupId = Convert.ToInt32(reader["TeacherGroupId"]);
+                var groupName = Enum.IsDefined(typeof(TeacherGroup), groupId)
+                    ? ((TeacherGroup)groupId).ToString()
+                    : TeacherGroup.Open.ToString();
+
+                _teachersGrid.Rows.Add(
+                    Convert.ToInt32(reader["TeacherId"]),
+                    reader["FullName"].ToString() ?? string.Empty,
+                    groupName,
+                    Convert.ToBoolean(reader["CanWorkMorning"]),
+                    Convert.ToBoolean(reader["CanWorkAfternoon"]),
+                    string.Empty,
+                    reader["MinDutyMinutes"] is DBNull ? string.Empty : reader["MinDutyMinutes"],
+                    reader["MaxDutyMinutes"] is DBNull ? string.Empty : reader["MaxDutyMinutes"],
+                    "-");
+            }
+
+            if (!loadedAny)
+                SeedSampleData();
+        }
+        catch
+        {
+            SeedSampleData();
+        }
     }
 
     private void ConfigureTeacherGrid()
