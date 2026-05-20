@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="../AppHost1/AppHost1.csproj" />
+  <Project Path="../ExamRosterApp_ServiceDefaults/ExamRosterApp_ServiceDefaults.csproj" />
+  <Project Path="ExamRosterApp.csproj" />
+</Solution>
