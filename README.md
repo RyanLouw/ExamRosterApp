@@ -20,3 +20,8 @@ Local-first school exam duty roster application (WPF + .NET 8 + EF Core + SQL Se
 ## Reset local DB
 - Stop AppHost and remove/recreate local SQL container volume.
 - Re-run migrations.
+
+
+## Open in IDE
+- Open `ExamRosterApp.sln` from the repository root.
+- You should see all projects, including `ExamRosterApp.AppHost` (Aspire host) in Solution Explorer.
