@@ -78,6 +78,8 @@ public sealed class RosterForm : Form
         _teachersGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "CanWorkMorning", HeaderText = "Can Work Morning" });
         _teachersGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "CanWorkAfternoon", HeaderText = "Can Work Afternoon" });
         _teachersGrid.Columns.Add("HomeSubject", "Home Subject");
+        _teachersGrid.Columns.Add("MinDutyMinutes", "Min Duty Minutes (optional)");
+        _teachersGrid.Columns.Add("MaxDutyMinutes", "Max Duty Minutes (optional)");
         _teachersGrid.Columns.Add("Unavailable", "Unavailable (yyyy-MM-dd|HH:mm-HH:mm;...) ");
     }
 
@@ -103,18 +105,20 @@ public sealed class RosterForm : Form
         _slotsGrid.Columns.Add("Subject", "Subject");
         _slotsGrid.Columns.Add("Venue", "Venue");
         _slotsGrid.Columns.Add("TeachersRequired", "Teachers Required");
+        _slotsGrid.Columns.Add("LearnerCount", "Learner Count (optional)");
+        _slotsGrid.Columns.Add("LearnersPerInvigilator", "Learners per Invigilator (optional)");
     }
 
     private void SeedSampleData()
     {
-        _teachersGrid.Rows.Add(1, "Mrs Smith", true, true, "Maths", "2026-06-01|10:00-11:00");
-        _teachersGrid.Rows.Add(2, "Mr Jones", true, false, "", "-");
-        _teachersGrid.Rows.Add(3, "Mrs Botha", false, true, "", "-");
-        _teachersGrid.Rows.Add(4, "Ms Patel", true, true, "", "-");
+        _teachersGrid.Rows.Add(1, "Mrs Smith", true, true, "Maths", 120, 240, "2026-06-01|10:00-11:00");
+        _teachersGrid.Rows.Add(2, "Mr Jones", true, false, "", "", 120, "-");
+        _teachersGrid.Rows.Add(3, "Mrs Botha", false, true, "", "", 120, "-");
+        _teachersGrid.Rows.Add(4, "Ms Patel", true, true, "", 180, "", "-");
 
-        _slotsGrid.Rows.Add(1, "2026-06-01", "08:00", "10:00", "Morning", "Grade 8", "Maths", "Hall A", 2);
-        _slotsGrid.Rows.Add(2, "2026-06-01", "08:00", "10:00", "Morning", "Grade 9", "English", "Room 12", 1);
-        _slotsGrid.Rows.Add(3, "2026-06-01", "13:00", "15:00", "Afternoon", "Grade 10", "Science", "Hall B", 2);
+        _slotsGrid.Rows.Add(1, "2026-06-01", "08:00", "10:00", "Morning", "Grade 8", "Maths", "Hall A", 1, 30, 30);
+        _slotsGrid.Rows.Add(2, "2026-06-01", "08:00", "10:00", "Morning", "Grade 9", "English", "Room 12", 1, 25, 25);
+        _slotsGrid.Rows.Add(3, "2026-06-01", "13:00", "15:00", "Afternoon", "Grade 10", "Science", "Hall B", 2, 80, 40);
     }
 
     private void GenerateRoster()
@@ -175,6 +179,8 @@ public sealed class RosterForm : Form
                 CanWorkMorning = ParseBool(row, "CanWorkMorning"),
                 CanWorkAfternoon = ParseBool(row, "CanWorkAfternoon"),
                 HomeSubject = EmptyToNull(ReadString(row, "HomeSubject")),
+                MinDutyMinutes = ParseNullableInt(row, "MinDutyMinutes"),
+                MaxDutyMinutes = ParseNullableInt(row, "MaxDutyMinutes"),
                 UnavailableSlots = ParseUnavailable(ReadString(row, "Unavailable"))
             });
         }
@@ -197,7 +203,9 @@ public sealed class RosterForm : Form
                 Grade = ReadString(row, "Grade"),
                 Subject = ReadString(row, "Subject"),
                 Venue = ReadString(row, "Venue"),
-                TeachersRequired = ParseInt(row, "TeachersRequired")
+                TeachersRequired = ParseInt(row, "TeachersRequired"),
+                LearnerCount = ParseNullableInt(row, "LearnerCount"),
+                LearnersPerInvigilator = ParseNullableInt(row, "LearnersPerInvigilator")
             });
         }
         return list;
@@ -211,6 +219,12 @@ public sealed class RosterForm : Form
 
     private static bool ParseBool(DataGridViewRow row, string column)
         => row.Cells[column].Value is bool b ? b : bool.Parse(ReadString(row, column));
+
+    private static int? ParseNullableInt(DataGridViewRow row, string column)
+    {
+        var value = ReadString(row, column);
+        return string.IsNullOrWhiteSpace(value) ? null : int.Parse(value);
+    }
 
     private static string? EmptyToNull(string value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
