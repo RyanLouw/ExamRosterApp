@@ -26,7 +26,8 @@ app.Run();
 static string BuildPage(string teachers = "", string slots = "", RosterResult? result = null, List<Teacher>? teacherList = null, List<ExamDutySlot>? slotList = null)
 {
     var output = new StringBuilder();
-    output.Append("""
+    output.Append(
+        """
 <!doctype html>
 <html>
 <head><meta charset='utf-8'><title>Exam Roster</title>
@@ -38,7 +39,8 @@ static string BuildPage(string teachers = "", string slots = "", RosterResult? r
 <form method='post' action='/generate'>
 <h3>Teachers CSV</h3>
 <p><code>Id,FullName,CanWorkMorning,CanWorkAfternoon,HomeSubject,Unavailable</code> where Unavailable uses <code>yyyy-MM-dd|HH:mm-HH:mm;...</code></p>
-<textarea name='teachers'>"""
+<textarea name='teachers'>
+"""
     );
     output.Append(System.Net.WebUtility.HtmlEncode(teachers));
     output.Append("</textarea><h3>Exam Slots CSV</h3><p><code>Id,Date,Start,End,Shift(Morning/Afternoon),Grade,Subject,Venue,TeachersRequired</code></p><textarea name='slots'>");
