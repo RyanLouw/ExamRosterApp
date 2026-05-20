@@ -75,6 +75,13 @@ public sealed class RosterForm : Form
         _teachersGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _teachersGrid.Columns.Add("Id", "Id");
         _teachersGrid.Columns.Add("FullName", "Teacher Name");
+        var teacherGroupColumn = new DataGridViewComboBoxColumn
+        {
+            Name = "Group",
+            HeaderText = "Group",
+            DataSource = Enum.GetNames(typeof(TeacherGroup))
+        };
+        _teachersGrid.Columns.Add(teacherGroupColumn);
         _teachersGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "CanWorkMorning", HeaderText = "Can Work Morning" });
         _teachersGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "CanWorkAfternoon", HeaderText = "Can Work Afternoon" });
         _teachersGrid.Columns.Add("HomeSubject", "Home Subject");
@@ -111,10 +118,10 @@ public sealed class RosterForm : Form
 
     private void SeedSampleData()
     {
-        _teachersGrid.Rows.Add(1, "Mrs Smith", true, true, "Maths", 120, 240, "2026-06-01|10:00-11:00");
-        _teachersGrid.Rows.Add(2, "Mr Jones", true, false, "", "", 120, "-");
-        _teachersGrid.Rows.Add(3, "Mrs Botha", false, true, "", "", 120, "-");
-        _teachersGrid.Rows.Add(4, "Ms Patel", true, true, "", 180, "", "-");
+        _teachersGrid.Rows.Add(1, "Mrs Smith", "Open", true, true, "Maths", 120, 240, "2026-06-01|10:00-11:00");
+        _teachersGrid.Rows.Add(2, "Mr Jones", "SecondaryNonPriority", true, false, "", "", 120, "-");
+        _teachersGrid.Rows.Add(3, "Mrs Botha", "MainInactive", false, false, "", "", 120, "-");
+        _teachersGrid.Rows.Add(4, "Ms Patel", "Open", true, true, "", 180, "", "2026-06-01|13:00-15:00;2026-06-02|08:00-10:00");
 
         _slotsGrid.Rows.Add(1, "2026-06-01", "08:00", "10:00", "Morning", "Grade 8", "Maths", "Hall A", 1, 30, 30);
         _slotsGrid.Rows.Add(2, "2026-06-01", "08:00", "10:00", "Morning", "Grade 9", "English", "Room 12", 1, 25, 25);
@@ -176,6 +183,7 @@ public sealed class RosterForm : Form
             {
                 Id = ParseInt(row, "Id"),
                 FullName = ReadString(row, "FullName"),
+                Group = Enum.Parse<TeacherGroup>(ReadString(row, "Group"), true),
                 CanWorkMorning = ParseBool(row, "CanWorkMorning"),
                 CanWorkAfternoon = ParseBool(row, "CanWorkAfternoon"),
                 HomeSubject = EmptyToNull(ReadString(row, "HomeSubject")),

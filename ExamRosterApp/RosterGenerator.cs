@@ -95,6 +95,9 @@ public sealed class RosterGenerator
         if (slot.ShiftType == ShiftType.Afternoon && !teacher.CanWorkAfternoon)
             return false;
 
+        if (teacher.Group == TeacherGroup.MainInactive)
+            return false;
+
         if (!string.IsNullOrWhiteSpace(teacher.HomeSubject) &&
             teacher.HomeSubject.Equals(slot.Subject, StringComparison.OrdinalIgnoreCase))
             return false;
@@ -135,6 +138,9 @@ public sealed class RosterGenerator
             score -= 100;
             score -= (teacher.MinDutyMinutes.Value - stats.TotalMinutes) / 10;
         }
+
+        if (teacher.Group == TeacherGroup.SecondaryNonPriority)
+            score += 150;
 
         score += slot.ShiftType switch
         {

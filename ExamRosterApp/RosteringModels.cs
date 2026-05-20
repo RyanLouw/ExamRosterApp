@@ -6,6 +6,13 @@ public enum ShiftType
     Afternoon = 2
 }
 
+public enum TeacherGroup
+{
+    Open = 1,
+    SecondaryNonPriority = 2,
+    MainInactive = 3
+}
+
 public sealed class UnavailableSlot
 {
     public DateOnly Date { get; init; }
@@ -19,6 +26,7 @@ public sealed class Teacher
     public string FullName { get; init; } = string.Empty;
     public bool CanWorkMorning { get; init; } = true;
     public bool CanWorkAfternoon { get; init; } = true;
+    public TeacherGroup Group { get; init; } = TeacherGroup.Open;
     public string? HomeSubject { get; init; }
     public int? MinDutyMinutes { get; init; }
     public int? MaxDutyMinutes { get; init; }
