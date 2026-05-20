@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ExamRosterApp_ServiceDefaults")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+74366490f731e7249bfbb9d74d5fbdb6f2c8ccea")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+fe2e994a2dd755d5fd2418a4ab4ef9213d532314")]
 [assembly: System.Reflection.AssemblyProductAttribute("ExamRosterApp_ServiceDefaults")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ExamRosterApp_ServiceDefaults")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

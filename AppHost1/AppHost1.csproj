@@ -1,4 +1,4 @@
-<Project Sdk="Aspire.AppHost.Sdk/13.1.2">
+﻿<Project Sdk="Aspire.AppHost.Sdk/13.1.2">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -7,5 +7,21 @@
     <Nullable>enable</Nullable>
     <UserSecretsId>7d9e7380-bac4-47a7-b708-2aeb7d245756</UserSecretsId>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Database.Migrations\**" />
+    <None Remove="Database.Migrations\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.3.4" />
+    <PackageReference Include="Aspire.Hosting.SqlServer" Version="13.3.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ExamRosterApp\Database.Migrations\Database.Migrations.csproj" />
+    <ProjectReference Include="..\ExamRosterApp\ExamRosterApp.csproj" />
+    <ProjectReference Include="..\ExamRosterApp_ServiceDefaults\ExamRosterApp_ServiceDefaults.csproj" />
+  </ItemGroup>
 
 </Project>

@@ -12,5 +12,29 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.23.0" />
   </ItemGroup>
+	<ItemGroup>
+		<Compile Remove="Database.Migrations\**\*.cs" />
+		<Compile Remove="ExamRosterApp.AppHost\**\*.cs" />
+		<Compile Remove="ExamRosterApp.Application\**\*.cs" />
+		<Compile Remove="ExamRosterApp.Domain\**\*.cs" />
+		<Compile Remove="ExamRosterApp.Infrastructure\**\*.cs" />
+		<Compile Remove="ExamRosterApp.ServiceDefaults\**\*.cs" />
+		<Compile Remove="ExamRosterApp.Tests\**\*.cs" />
 
+		<None Remove="Database.Migrations\**\*" />
+		<None Remove="ExamRosterApp.AppHost\**\*" />
+		<None Remove="ExamRosterApp.Application\**\*" />
+		<None Remove="ExamRosterApp.Domain\**\*" />
+		<None Remove="ExamRosterApp.Infrastructure\**\*" />
+		<None Remove="ExamRosterApp.ServiceDefaults\**\*" />
+		<None Remove="ExamRosterApp.Tests\**\*" />
+
+		<Page Remove="Database.Migrations\**\*.xaml" />
+		<Page Remove="ExamRosterApp.AppHost\**\*.xaml" />
+		<Page Remove="ExamRosterApp.Application\**\*.xaml" />
+		<Page Remove="ExamRosterApp.Domain\**\*.xaml" />
+		<Page Remove="ExamRosterApp.Infrastructure\**\*.xaml" />
+		<Page Remove="ExamRosterApp.ServiceDefaults\**\*.xaml" />
+		<Page Remove="ExamRosterApp.Tests\**\*.xaml" />
+	</ItemGroup>
 </Project>

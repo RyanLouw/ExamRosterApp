@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="../AppHost1/AppHost1.csproj" />
   <Project Path="../ExamRosterApp_ServiceDefaults/ExamRosterApp_ServiceDefaults.csproj" />
+  <Project Path="Database.Migrations/Database.Migrations.csproj" Id="b12f1b56-e677-4696-821a-63eab9247f88" />
   <Project Path="ExamRosterApp.csproj" />
 </Solution>

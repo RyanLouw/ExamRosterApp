@@ -67,18 +67,21 @@
           "dependencies": {
             "Aspire.Dashboard.Sdk.win-x64": {
               "target": "Package",
-              "version": "[13.1.2, )",
+              "version": "[13.3.4, )",
               "autoReferenced": true
             },
             "Aspire.Hosting.AppHost": {
               "target": "Package",
-              "version": "[13.1.2, )",
-              "autoReferenced": true
+              "version": "[13.3.4, )"
             },
             "Aspire.Hosting.Orchestration.win-x64": {
               "target": "Package",
-              "version": "[13.1.2, )",
+              "version": "[13.3.4, )",
               "autoReferenced": true
+            },
+            "Aspire.Hosting.SqlServer": {
+              "target": "Package",
+              "version": "[13.3.4, )"
             }
           },
           "imports": [

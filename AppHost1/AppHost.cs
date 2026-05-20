@@ -1,22 +1,20 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-
-var postgres = builder.AddPostgres("rentalapp-postgres")
+var sql = builder.AddSqlServer("examroster-sql")
     .WithLifetime(ContainerLifetime.Persistent)
-    .WithDataVolume("rentalapp-postgres");
+    .WithDataVolume("examroster-sql-data");
 
-var ExameDb = postgres.AddDatabase("ExameDb");
+var examDb = sql.AddDatabase("ExamDb");
 
-
-var migrations = builder.AddProject<>("database-migrations")
+var migrations = builder.AddProject<Projects.Database_Migrations>("database-migrations")
     .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
-    .WithReference(ExameDb)
-    .WaitFor(ExameDb);
+    .WithReference(examDb)
+    .WaitFor(examDb);
 
-
-builder.AddProject<Projects.ExamRosterApp>("web")
+builder.AddProject<Projects.ExamRosterApp>("desktop")
     .WithExplicitStart()
-    .WithReference(ExameDb);
-    
+    .WithReference(examDb)
+    .WaitFor(examDb)
+    .WaitForCompletion(migrations);
 
 await builder.Build().RunAsync();
