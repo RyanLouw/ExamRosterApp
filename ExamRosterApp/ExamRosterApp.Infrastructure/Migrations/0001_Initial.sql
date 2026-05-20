@@ -1,0 +1,2 @@
+-- Placeholder migration script for local Aspire SQL Server only.
+-- Use: dotnet ef migrations add InitialCreate -p ExamRosterApp.Infrastructure -s ExamRosterApp.Desktop

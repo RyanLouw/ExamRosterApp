@@ -1,0 +1,2 @@
+using ExamRosterApp.Application.Services; using ExamRosterApp.Domain.Entities; using ExamRosterApp.Domain.Enums;
+public class RosterGeneratorTests { [Fact] public async Task ReturnsWarningWhenUnderstaffed(){ var gen=new RosterGenerator(); var (a,w)=await gen.GenerateRosterAsync([], [new ExamDutySlot{Id=1,Date=new DateOnly(2026,1,1),StartTime=new TimeOnly(9,0),EndTime=new TimeOnly(10,0),ShiftType=ShiftType.Morning,Grade="1",Subject="Math",Venue="A",TeachersRequired=1}], [], []); Assert.Empty(a); Assert.NotEmpty(w);} }
