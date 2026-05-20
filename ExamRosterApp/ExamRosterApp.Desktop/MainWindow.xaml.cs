@@ -1,1 +1,11 @@
-namespace ExamRosterApp.Desktop; public partial class MainWindow : Window { public MainWindow(){InitializeComponent();} }
+using System.Windows;
+
+namespace ExamRosterApp.Desktop;
+
+public partial class MainWindow : Window
+{
+    public MainWindow()
+    {
+        InitializeComponent();
+    }
+}

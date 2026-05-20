@@ -1,20 +1,30 @@
 # ExamRosterApp
 
-Local development uses **Aspire-managed SQL Server** with database name `ExamRoster_LocalDev`. Never use live connection strings here.
+Local development uses an **Aspire-managed SQL Server** database named `ExamRoster_LocalDev`.
+This setup is isolated for development/testing and must never use a live production connection string.
 
-## Run
-1. Start AppHost project.
-2. Aspire starts local SQL Server container and Desktop app.
+## Run locally
+1. Start `ExamRosterApp.AppHost`.
+2. Aspire starts the local SQL Server container and wires the `examrosterdb` connection into the Desktop app.
+3. Open the Desktop app and use the **Migrations** tab to apply EF migrations to local DB.
 
-## Migrations
-- Create: `dotnet ef migrations add InitialCreate --project ExamRosterApp.Infrastructure --startup-project ExamRosterApp.Desktop`
-- Apply: `dotnet ef database update --project ExamRosterApp.Infrastructure --startup-project ExamRosterApp.Desktop`
+## EF Core migrations
+- Create migration:
+  `dotnet ef migrations add InitialCreate --project ExamRosterApp.Infrastructure --startup-project ExamRosterApp.Desktop`
+- Apply migration:
+  `dotnet ef database update --project ExamRosterApp.Infrastructure --startup-project ExamRosterApp.Desktop`
 
-## Confirm local DB
-Check connection string key `examrosterdb` points to `ExamRoster_LocalDev` in `appsettings.Development.json`.
+## Confirm local DB only
+- Verify connection string name is `examrosterdb`.
+- Verify database name is `ExamRoster_LocalDev`.
+- Development-only connection string is in `ExamRosterApp.AppHost/appsettings.Development.json`.
 
-## Reset DB
-Remove sql data volume/container from Aspire dashboard, then rerun migrations.
+## Reset/recreate local DB
+1. Stop AppHost.
+2. Remove Aspire SQL container/volume from Aspire dashboard or Docker.
+3. Restart AppHost.
+4. Re-apply migrations from CLI or the **Migrations** tab in the desktop app.
 
-## Production placeholder
-Production connection string must come from environment variables or user secrets only.
+## Production placeholder policy
+Production connection strings are not stored in source control.
+Use **user secrets** or **environment variables** when production wiring is needed later.

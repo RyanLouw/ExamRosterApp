@@ -1,1 +1,18 @@
-<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><ProjectReference Include="..\ExamRosterApp.ServiceDefaults\ExamRosterApp.ServiceDefaults.csproj" /><ProjectReference Include="..\ExamRosterApp.Desktop\ExamRosterApp.Desktop.csproj" /></ItemGroup><ItemGroup><PackageReference Include="Aspire.Hosting.AppHost" Version="8.2.2" /></ItemGroup></Project>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsAspireHost>true</IsAspireHost>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="8.2.2" />
+    <PackageReference Include="Aspire.Hosting.SqlServer" Version="8.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ExamRosterApp.ServiceDefaults\ExamRosterApp.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\ExamRosterApp.Desktop\ExamRosterApp.Desktop.csproj" />
+  </ItemGroup>
+</Project>

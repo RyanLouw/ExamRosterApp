@@ -1,5 +1,9 @@
 <Solution>
-  <Project Path="../AppHost1/AppHost1.csproj" />
-  <Project Path="../ExamRosterApp_ServiceDefaults/ExamRosterApp_ServiceDefaults.csproj" />
-  <Project Path="ExamRosterApp.csproj" />
+  <Project Path="ExamRosterApp.AppHost/ExamRosterApp.AppHost.csproj" />
+  <Project Path="ExamRosterApp.ServiceDefaults/ExamRosterApp.ServiceDefaults.csproj" />
+  <Project Path="ExamRosterApp.Desktop/ExamRosterApp.Desktop.csproj" />
+  <Project Path="ExamRosterApp.Domain/ExamRosterApp.Domain.csproj" />
+  <Project Path="ExamRosterApp.Application/ExamRosterApp.Application.csproj" />
+  <Project Path="ExamRosterApp.Infrastructure/ExamRosterApp.Infrastructure.csproj" />
+  <Project Path="ExamRosterApp.Tests/ExamRosterApp.Tests.csproj" />
 </Solution>
