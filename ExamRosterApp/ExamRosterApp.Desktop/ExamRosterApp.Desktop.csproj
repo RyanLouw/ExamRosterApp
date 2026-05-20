@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWPF>true</UseWPF><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../ExamRosterApp.Application/ExamRosterApp.Application.csproj" /><ProjectReference Include="../ExamRosterApp.Infrastructure/ExamRosterApp.Infrastructure.csproj" /></ItemGroup>
+  <ItemGroup><PackageReference Include="ClosedXML" Version="0.104.2" /></ItemGroup>
+</Project>
