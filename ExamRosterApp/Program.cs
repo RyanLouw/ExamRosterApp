@@ -135,24 +135,36 @@ public sealed class RosterForm : Form
 
     private void LoadExamSlots(SqlConnection connection)
     {
+        var loadedRows = LoadExamDutySlots(connection);
+        if (loadedRows > 0)
+            return;
+
+        LoadExamSlotsFromExamPaper(connection);
+    }
+
+    private int LoadExamDutySlots(SqlConnection connection)
+    {
         using var command = connection.CreateCommand();
         command.CommandText = @"
-                SELECT ExamDutySlotId, DutyDate, StartTime, EndTime, ShiftType,
+                SELECT ExamDutySlotId, [Date], StartTime, EndTime, ShiftTypeId,
                        Grade, Subject, Venue, TeachersRequired, LearnerCount, LearnersPerInvigilator
                 FROM tr.ExamDutySlot
-                ORDER BY DutyDate, StartTime, Venue;";
+                WHERE IsActive = 1
+                ORDER BY [Date], StartTime, Venue;";
 
         using var reader = command.ExecuteReader();
+        var loaded = 0;
+
         while (reader.Read())
         {
-            var shiftValue = reader["ShiftType"].ToString() ?? ShiftType.Morning.ToString();
-            var shiftName = Enum.TryParse<ShiftType>(shiftValue, true, out var shift)
-                ? shift.ToString()
+            var shiftId = Convert.ToInt32(reader["ShiftTypeId"]);
+            var shiftName = Enum.IsDefined(typeof(ShiftType), shiftId)
+                ? ((ShiftType)shiftId).ToString()
                 : ShiftType.Morning.ToString();
 
             _slotsGrid.Rows.Add(
                 Convert.ToInt32(reader["ExamDutySlotId"]),
-                DateOnly.FromDateTime(Convert.ToDateTime(reader["DutyDate"])).ToString("yyyy-MM-dd"),
+                DateOnly.FromDateTime(Convert.ToDateTime(reader["Date"])).ToString("yyyy-MM-dd"),
                 TimeOnly.FromDateTime(Convert.ToDateTime(reader["StartTime"])).ToString("HH:mm"),
                 TimeOnly.FromDateTime(Convert.ToDateTime(reader["EndTime"])).ToString("HH:mm"),
                 shiftName,
@@ -162,6 +174,43 @@ public sealed class RosterForm : Form
                 Convert.ToInt32(reader["TeachersRequired"]),
                 reader["LearnerCount"] is DBNull ? string.Empty : reader["LearnerCount"],
                 reader["LearnersPerInvigilator"] is DBNull ? string.Empty : reader["LearnersPerInvigilator"]);
+
+            loaded++;
+        }
+
+        return loaded;
+    }
+
+    private void LoadExamSlotsFromExamPaper(SqlConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+                SELECT ExamPaperId, [Date], StartTime, EndTime, ShiftTypeId,
+                       Grade, Subject
+                FROM tr.ExamPaper
+                WHERE IsActive = 1 AND IsSchoolHoliday = 0
+                ORDER BY [Date], StartTime, Grade;";
+
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            var shiftId = Convert.ToInt32(reader["ShiftTypeId"]);
+            var shiftName = Enum.IsDefined(typeof(ShiftType), shiftId)
+                ? ((ShiftType)shiftId).ToString()
+                : ShiftType.Morning.ToString();
+
+            _slotsGrid.Rows.Add(
+                Convert.ToInt32(reader["ExamPaperId"]),
+                DateOnly.FromDateTime(Convert.ToDateTime(reader["Date"])).ToString("yyyy-MM-dd"),
+                TimeOnly.FromDateTime(Convert.ToDateTime(reader["StartTime"])).ToString("HH:mm"),
+                TimeOnly.FromDateTime(Convert.ToDateTime(reader["EndTime"])).ToString("HH:mm"),
+                shiftName,
+                reader["Grade"].ToString() ?? string.Empty,
+                reader["Subject"].ToString() ?? string.Empty,
+                "TBD",
+                1,
+                string.Empty,
+                string.Empty);
         }
     }
 
