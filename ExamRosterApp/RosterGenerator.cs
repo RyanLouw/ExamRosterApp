@@ -29,9 +29,14 @@ public sealed class RosterGenerator
 
         if (best is not null)
         {
+            var spreads = runSummaries
+                .Select(s => s.Split(',', StringSplitOptions.TrimEntries)[1].Split('=')[1])
+                .Distinct()
+                .Count();
             best.Diagnostics.Insert(0, "=== Multi-run attempt summary ===");
-            foreach (var line in runSummaries)
-                best.Diagnostics.Insert(1, line);
+            for (var i = 0; i < runSummaries.Count; i++)
+                best.Diagnostics.Insert(1 + i, runSummaries[i]);
+            best.Diagnostics.Insert(1 + runSummaries.Count, $"distinctSpreadValues={spreads}");
         }
 
         return best ?? new RosterResult();
@@ -39,6 +44,10 @@ public sealed class RosterGenerator
 
     private RosterResult GenerateSingleRun(List<Teacher> teachers, List<ExamDutySlot> slots, int seed)
     {
+        var seededTeachers = teachers
+            .OrderBy(t => StableHash($"{seed}-{t.Id}-{t.FullName}"))
+            .ToList();
+
         var optimizedSlots = OptimizeSeniorSlotStaffing(teachers, slots);
         var result = new RosterResult();
         var normalizedSlots = new List<ExamDutySlot>(optimizedSlots.Count);
@@ -56,7 +65,7 @@ public sealed class RosterGenerator
         }
 
         var slotById = normalizedSlots.ToDictionary(s => s.Id);
-        var stats = teachers.ToDictionary(
+        var stats = seededTeachers.ToDictionary(
             t => t.Id,
             t => new TeacherDutyStats { TeacherId = t.Id });
 
@@ -115,6 +124,8 @@ public sealed class RosterGenerator
         result.Diagnostics.Add(
             $"Fairness math: totalAssignedMinutes={totalAssignedMinutes}, teachers={teachers.Count}, " +
             $"averageMinutes={avgMinutes:F2}, minMinutes={minMinutes}, maxMinutes={maxMinutes}, diff={maxMinutes - minMinutes}.");
+        var minPossibleSpread = normalizedSlots.Max(s => s.DurationMinutes);
+        result.Diagnostics.Add($"Fairness lower bound estimate: at least {minPossibleSpread} minutes spread when some teachers can remain unassigned.");
         result.Diagnostics.Add($"Final fairness spread minutes: min={totals.Values.Min()}, max={totals.Values.Max()}, diff={totals.Values.Max() - totals.Values.Min()}");
         result.Diagnostics.Add("=== Teacher totals (minutes) ===");
         foreach (var kv in totals.OrderBy(k => k.Key))
