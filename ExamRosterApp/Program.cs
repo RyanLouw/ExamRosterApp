@@ -391,8 +391,10 @@ public sealed class RosterForm : Form
 
     private static string Csv(string value)
     {
-        var escaped = value.Replace(""", """");
-        return $""{escaped}"";
+        value ??= string.Empty;
+
+        var escaped = value.Replace("\"", "\"\"");
+        return $"\"{escaped}\"";
     }
 
     private List<Teacher> ReadTeachers()
