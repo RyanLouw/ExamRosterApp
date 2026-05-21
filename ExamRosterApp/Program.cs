@@ -66,25 +66,33 @@ public sealed class RosterForm : Form
         root.Controls.Add(outputGroup, 0, 3);
 
         Controls.Add(root);
-        LoadTeachersFromDatabaseOrSeed();
+        LoadDataFromDatabase();
     }
 
-    private void LoadTeachersFromDatabaseOrSeed()
+    private void LoadDataFromDatabase()
     {
         var connectionString = Environment.GetEnvironmentVariable("EXAMROSTER_DB_CONNECTION");
         if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            SeedSampleData();
             return;
-        }
 
         try
         {
             using var connection = new SqlConnection(connectionString);
             connection.Open();
 
-            using var command = connection.CreateCommand();
-            command.CommandText = @"
+            LoadTeachers(connection);
+            LoadExamSlots(connection);
+        }
+        catch
+        {
+            // Leave grids empty if database cannot be reached.
+        }
+    }
+
+    private void LoadTeachers(SqlConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
                 SELECT TeacherId, FullName, CanWorkMorning, CanWorkAfternoon, IsActive,
                        ISNULL(TeacherGroupId, 1) AS TeacherGroupId,
                        MinDutyMinutes, MaxDutyMinutes
@@ -92,35 +100,56 @@ public sealed class RosterForm : Form
                 WHERE IsActive = 1
                 ORDER BY FullName;";
 
-            using var reader = command.ExecuteReader();
-            var loadedAny = false;
-
-            while (reader.Read())
-            {
-                loadedAny = true;
-                var groupId = Convert.ToInt32(reader["TeacherGroupId"]);
-                var groupName = Enum.IsDefined(typeof(TeacherGroup), groupId)
-                    ? ((TeacherGroup)groupId).ToString()
-                    : TeacherGroup.Open.ToString();
-
-                _teachersGrid.Rows.Add(
-                    Convert.ToInt32(reader["TeacherId"]),
-                    reader["FullName"].ToString() ?? string.Empty,
-                    groupName,
-                    Convert.ToBoolean(reader["CanWorkMorning"]),
-                    Convert.ToBoolean(reader["CanWorkAfternoon"]),
-                    string.Empty,
-                    reader["MinDutyMinutes"] is DBNull ? string.Empty : reader["MinDutyMinutes"],
-                    reader["MaxDutyMinutes"] is DBNull ? string.Empty : reader["MaxDutyMinutes"],
-                    "-");
-            }
-
-            if (!loadedAny)
-                SeedSampleData();
-        }
-        catch
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
         {
-            SeedSampleData();
+            var groupId = Convert.ToInt32(reader["TeacherGroupId"]);
+            var groupName = Enum.IsDefined(typeof(TeacherGroup), groupId)
+                ? ((TeacherGroup)groupId).ToString()
+                : TeacherGroup.Open.ToString();
+
+            _teachersGrid.Rows.Add(
+                Convert.ToInt32(reader["TeacherId"]),
+                reader["FullName"].ToString() ?? string.Empty,
+                groupName,
+                Convert.ToBoolean(reader["CanWorkMorning"]),
+                Convert.ToBoolean(reader["CanWorkAfternoon"]),
+                string.Empty,
+                reader["MinDutyMinutes"] is DBNull ? string.Empty : reader["MinDutyMinutes"],
+                reader["MaxDutyMinutes"] is DBNull ? string.Empty : reader["MaxDutyMinutes"],
+                "-");
+        }
+    }
+
+    private void LoadExamSlots(SqlConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+                SELECT ExamDutySlotId, DutyDate, StartTime, EndTime, ShiftType,
+                       Grade, Subject, Venue, TeachersRequired, LearnerCount, LearnersPerInvigilator
+                FROM tr.ExamDutySlot
+                ORDER BY DutyDate, StartTime, Venue;";
+
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            var shiftValue = reader["ShiftType"].ToString() ?? ShiftType.Morning.ToString();
+            var shiftName = Enum.TryParse<ShiftType>(shiftValue, true, out var shift)
+                ? shift.ToString()
+                : ShiftType.Morning.ToString();
+
+            _slotsGrid.Rows.Add(
+                Convert.ToInt32(reader["ExamDutySlotId"]),
+                DateOnly.FromDateTime(Convert.ToDateTime(reader["DutyDate"])).ToString("yyyy-MM-dd"),
+                TimeOnly.FromDateTime(Convert.ToDateTime(reader["StartTime"])).ToString("HH:mm"),
+                TimeOnly.FromDateTime(Convert.ToDateTime(reader["EndTime"])).ToString("HH:mm"),
+                shiftName,
+                reader["Grade"].ToString() ?? string.Empty,
+                reader["Subject"].ToString() ?? string.Empty,
+                reader["Venue"].ToString() ?? string.Empty,
+                Convert.ToInt32(reader["TeachersRequired"]),
+                reader["LearnerCount"] is DBNull ? string.Empty : reader["LearnerCount"],
+                reader["LearnersPerInvigilator"] is DBNull ? string.Empty : reader["LearnersPerInvigilator"]);
         }
     }
 
@@ -170,18 +199,6 @@ public sealed class RosterForm : Form
         _slotsGrid.Columns.Add("TeachersRequired", "Teachers Required");
         _slotsGrid.Columns.Add("LearnerCount", "Learner Count (optional)");
         _slotsGrid.Columns.Add("LearnersPerInvigilator", "Learners per Invigilator (optional)");
-    }
-
-    private void SeedSampleData()
-    {
-        _teachersGrid.Rows.Add(1, "Mrs Smith", "Open", true, true, "Maths", 120, 240, "2026-06-01|10:00-11:00");
-        _teachersGrid.Rows.Add(2, "Mr Jones", "SecondaryNonPriority", true, false, "", "", 120, "-");
-        _teachersGrid.Rows.Add(3, "Mrs Botha", "MainInactive", false, false, "", "", 120, "-");
-        _teachersGrid.Rows.Add(4, "Ms Patel", "Open", true, true, "", 180, "", "2026-06-01|13:00-15:00;2026-06-02|08:00-10:00");
-
-        _slotsGrid.Rows.Add(1, "2026-06-01", "08:00", "10:00", "Morning", "Grade 8", "Maths", "Hall A", 1, 30, 30);
-        _slotsGrid.Rows.Add(2, "2026-06-01", "08:00", "10:00", "Morning", "Grade 9", "English", "Room 12", 1, 25, 25);
-        _slotsGrid.Rows.Add(3, "2026-06-01", "13:00", "15:00", "Afternoon", "Grade 10", "Science", "Hall B", 2, 80, 40);
     }
 
     private void GenerateRoster()
