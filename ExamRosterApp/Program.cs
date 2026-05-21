@@ -1,4 +1,5 @@
 using System.Text;
+using System.Globalization;
 using System.Data.SqlClient;
 using System.Windows.Forms;
 using ExamRosterApp.Rostering;
@@ -38,16 +39,19 @@ public sealed class RosterForm : Form
         var addSlotButton = new Button { Text = "Add Exam Slot", AutoSize = true };
         var generateButton = new Button { Text = "Generate Roster", AutoSize = true };
         var clearButton = new Button { Text = "Clear Output", AutoSize = true };
+        var exportButton = new Button { Text = "Export to Excel (CSV)", AutoSize = true };
 
         addTeacherButton.Click += (_, _) => _teachersGrid.Rows.Add();
         addSlotButton.Click += (_, _) => _slotsGrid.Rows.Add();
         generateButton.Click += (_, _) => GenerateRoster();
         clearButton.Click += (_, _) => _outputBox.Clear();
+        exportButton.Click += (_, _) => ExportRosterCsv();
 
         buttonPanel.Controls.Add(addTeacherButton);
         buttonPanel.Controls.Add(addSlotButton);
         buttonPanel.Controls.Add(generateButton);
         buttonPanel.Controls.Add(clearButton);
+        buttonPanel.Controls.Add(exportButton);
         root.Controls.Add(buttonPanel, 0, 0);
 
         ConfigureTeacherGrid();
@@ -274,8 +278,8 @@ public sealed class RosterForm : Form
         _slotsGrid.Columns.Add("Subject", "Subject");
         _slotsGrid.Columns.Add("Venue", "Venue");
         _slotsGrid.Columns.Add("TeachersRequired", "Teachers Required");
-        _slotsGrid.Columns.Add("LearnerCount", "Learner Count (optional)");
-        _slotsGrid.Columns.Add("LearnersPerInvigilator", "Learners per Invigilator (optional)");
+        _slotsGrid.Columns.Add("IntervalCount", "Interval Count (optional)");
+        _slotsGrid.Columns.Add("TeachersPerInterval", "Teachers per Interval (optional)");
     }
 
     private void GenerateRoster()
@@ -284,6 +288,7 @@ public sealed class RosterForm : Form
         {
             var teachers = ReadTeachers();
             var slots = ReadSlots();
+            ShowJuniorGradeHintIfNeeded(slots);
 
             var generator = new RosterGenerator();
             var result = generator.GenerateRoster(teachers, slots);
@@ -321,6 +326,73 @@ public sealed class RosterForm : Form
         {
             MessageBox.Show($"Please fix input data: {ex.Message}", "Invalid input", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+    }
+
+    private void ShowJuniorGradeHintIfNeeded(List<ExamDutySlot> slots)
+    {
+        if (slots.Any(s => s.Grade.Contains("Grade 8", StringComparison.OrdinalIgnoreCase)
+            || s.Grade.Contains("Grade 9", StringComparison.OrdinalIgnoreCase)))
+        {
+            MessageBox.Show(
+                "Reminder: Grade 8 and Grade 9 usually require 1 teacher per test.",
+                "Grade 8/9 Hint",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+    }
+
+    private void ExportRosterCsv()
+    {
+        try
+        {
+            var teachers = ReadTeachers();
+            var slots = ReadSlots();
+            var generator = new RosterGenerator();
+            var result = generator.GenerateRoster(teachers, slots);
+
+            var slotById = slots.ToDictionary(s => s.Id);
+            var teacherById = teachers.ToDictionary(t => t.Id);
+
+            using var saveDialog = new SaveFileDialog
+            {
+                Filter = "CSV files (*.csv)|*.csv",
+                FileName = $"exam-roster-{DateTime.Now:yyyyMMdd-HHmm}.csv"
+            };
+
+            if (saveDialog.ShowDialog() != DialogResult.OK)
+                return;
+
+            var csv = new StringBuilder();
+            csv.AppendLine("Teacher,Date,Start,End,Shift,Grade,Subject,Venue");
+
+            foreach (var assignment in result.Assignments
+                         .OrderBy(a => teacherById[a.TeacherId].FullName)
+                         .ThenBy(a => slotById[a.ExamDutySlotId].Date)
+                         .ThenBy(a => slotById[a.ExamDutySlotId].StartTime))
+            {
+                var teacher = teacherById[assignment.TeacherId];
+                var slot = slotById[assignment.ExamDutySlotId];
+                csv.AppendLine(string.Join(",", new[]
+                {
+                    Csv(teacher.FullName), Csv(slot.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+                    Csv(slot.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture)), Csv(slot.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture)),
+                    Csv(slot.ShiftType.ToString()), Csv(slot.Grade), Csv(slot.Subject), Csv(slot.Venue)
+                }));
+            }
+
+            File.WriteAllText(saveDialog.FileName, csv.ToString(), Encoding.UTF8);
+            MessageBox.Show($"Exported roster to {saveDialog.FileName}", "Export complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Export failed: {ex.Message}", "Export error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private static string Csv(string value)
+    {
+        var escaped = value.Replace(""", """");
+        return $""{escaped}"";
     }
 
     private List<Teacher> ReadTeachers()
@@ -362,8 +434,8 @@ public sealed class RosterForm : Form
                 Subject = ReadString(row, "Subject"),
                 Venue = ReadString(row, "Venue"),
                 TeachersRequired = ParseInt(row, "TeachersRequired"),
-                LearnerCount = ParseNullableInt(row, "LearnerCount"),
-                LearnersPerInvigilator = ParseNullableInt(row, "LearnersPerInvigilator")
+                LearnerCount = ParseNullableInt(row, "IntervalCount"),
+                LearnersPerInvigilator = ParseNullableInt(row, "TeachersPerInterval")
             });
         }
         return list;
