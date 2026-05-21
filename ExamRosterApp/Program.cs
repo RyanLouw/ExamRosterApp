@@ -22,6 +22,7 @@ public sealed class RosterForm : Form
     private readonly DataGridView _slotsGrid = new();
     private readonly DataGridView _statsGrid = new();
     private readonly TextBox _outputBox = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, Dock = DockStyle.Fill };
+    private List<string> _latestDiagnostics = [];
 
     public RosterForm()
     {
@@ -41,18 +42,21 @@ public sealed class RosterForm : Form
         var generateButton = new Button { Text = "Generate Roster", AutoSize = true };
         var clearButton = new Button { Text = "Clear Output", AutoSize = true };
         var exportButton = new Button { Text = "Export to Excel (CSV)", AutoSize = true };
+        var exportLogButton = new Button { Text = "Export Logs", AutoSize = true };
 
         addTeacherButton.Click += (_, _) => _teachersGrid.Rows.Add();
         addSlotButton.Click += (_, _) => _slotsGrid.Rows.Add();
         generateButton.Click += (_, _) => GenerateRoster();
         clearButton.Click += (_, _) => _outputBox.Clear();
         exportButton.Click += (_, _) => ExportRosterCsv();
+        exportLogButton.Click += (_, _) => ExportLatestDiagnostics();
 
         buttonPanel.Controls.Add(addTeacherButton);
         buttonPanel.Controls.Add(addSlotButton);
         buttonPanel.Controls.Add(generateButton);
         buttonPanel.Controls.Add(clearButton);
         buttonPanel.Controls.Add(exportButton);
+        buttonPanel.Controls.Add(exportLogButton);
         root.Controls.Add(buttonPanel, 0, 0);
 
         ConfigureTeacherGrid();
@@ -303,6 +307,7 @@ public sealed class RosterForm : Form
 
             var generator = new RosterGenerator();
             var result = generator.GenerateRoster(teachers, slots);
+            _latestDiagnostics = result.Diagnostics.ToList();
 
             var slotById = slots.ToDictionary(s => s.Id);
             var teacherById = teachers.ToDictionary(t => t.Id);
@@ -404,6 +409,27 @@ public sealed class RosterForm : Form
         {
             MessageBox.Show($"Export failed: {ex.Message}", "Export error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+    }
+
+    private void ExportLatestDiagnostics()
+    {
+        if (_latestDiagnostics.Count == 0)
+        {
+            MessageBox.Show("No diagnostics yet. Generate a roster first.", "No logs", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var saveDialog = new SaveFileDialog
+        {
+            Filter = "Text files (*.txt)|*.txt",
+            FileName = $"roster-diagnostics-{DateTime.Now:yyyyMMdd-HHmm}.txt"
+        };
+
+        if (saveDialog.ShowDialog() != DialogResult.OK)
+            return;
+
+        File.WriteAllLines(saveDialog.FileName, _latestDiagnostics, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        MessageBox.Show($"Saved diagnostics to {saveDialog.FileName}", "Logs exported", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private static string Csv(string value, string delimiter)

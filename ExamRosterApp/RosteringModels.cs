@@ -60,6 +60,7 @@ public sealed class RosterResult
 {
     public List<DutyAssignment> Assignments { get; } = [];
     public List<string> Warnings { get; } = [];
+    public List<string> Diagnostics { get; } = [];
 }
 
 public sealed class TeacherDutyStats

@@ -19,6 +19,7 @@ public sealed class RosterGenerator
 
         foreach (var slot in orderedSlots)
         {
+            result.Diagnostics.Add($"Slot {slot.Id} {slot.Date:yyyy-MM-dd} {slot.Subject}: teachersRequired={slot.TeachersRequired}, duration={slot.DurationMinutes}m");
             for (var i = 0; i < slot.TeachersRequired; i++)
             {
                 var candidates = teachers
@@ -46,11 +47,16 @@ public sealed class RosterGenerator
                 var chosen = candidates[0].Teacher;
                 result.Assignments.Add(new DutyAssignment { TeacherId = chosen.Id, ExamDutySlotId = slot.Id });
                 UpdateStats(stats[chosen.Id], slot);
+                result.Diagnostics.Add($"Assigned teacher {chosen.Id} ({chosen.FullName}) to slot {slot.Id}");
             }
         }
 
         RebalanceForFairness(result.Assignments, teachers, slotById);
         ValidateHardConstraints(result.Assignments, teachers, slotById, result.Warnings);
+        var totals = teachers.ToDictionary(
+            t => t.Id,
+            t => result.Assignments.Where(a => a.TeacherId == t.Id).Select(a => slotById[a.ExamDutySlotId].DurationMinutes).Sum());
+        result.Diagnostics.Add($"Final fairness spread minutes: min={totals.Values.Min()}, max={totals.Values.Max()}, diff={totals.Values.Max() - totals.Values.Min()}");
         return result;
     }
 
@@ -65,8 +71,8 @@ public sealed class RosterGenerator
 
         if (slot.LearnerCount is > 0 && slot.LearnersPerInvigilator is > 0 && !isLowerGrade)
         {
-            var byIntervals = slot.LearnerCount.Value * slot.LearnersPerInvigilator.Value;
-            teachersRequired = Math.Max(teachersRequired, byIntervals);
+            var byTeachersPerInterval = slot.LearnersPerInvigilator.Value;
+            teachersRequired = Math.Max(teachersRequired, byTeachersPerInterval);
         }
 
         return new ExamDutySlot
