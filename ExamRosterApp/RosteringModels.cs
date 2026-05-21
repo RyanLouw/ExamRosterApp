@@ -44,6 +44,8 @@ public sealed class ExamDutySlot
     public string Subject { get; init; } = string.Empty;
     public string Venue { get; init; } = string.Empty;
     public int TeachersRequired { get; init; }
+    public int? MinTeachersRequired { get; init; }
+    public int? MaxTeachersRequired { get; init; }
     public int? LearnerCount { get; init; }
     public int? LearnersPerInvigilator { get; init; }
 

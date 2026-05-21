@@ -191,6 +191,8 @@ public sealed class RosterForm : Form
                 reader["Subject"].ToString() ?? string.Empty,
                 reader["Venue"].ToString() ?? string.Empty,
                 Convert.ToInt32(reader["TeachersRequired"]),
+                string.Empty,
+                string.Empty,
                 reader["LearnerCount"] is DBNull ? string.Empty : reader["LearnerCount"],
                 reader["LearnersPerInvigilator"] is DBNull ? string.Empty : reader["LearnersPerInvigilator"]);
 
@@ -228,6 +230,8 @@ public sealed class RosterForm : Form
                 reader["Subject"].ToString() ?? string.Empty,
                 "TBD",
                 1,
+                string.Empty,
+                string.Empty,
                 string.Empty,
                 string.Empty);
         }
@@ -293,6 +297,8 @@ public sealed class RosterForm : Form
         _slotsGrid.Columns.Add("Subject", "Subject");
         _slotsGrid.Columns.Add("Venue", "Venue");
         _slotsGrid.Columns.Add("TeachersRequired", "Teachers Required");
+        _slotsGrid.Columns.Add("MinTeachersRequired", "Min Teachers (opt)");
+        _slotsGrid.Columns.Add("MaxTeachersRequired", "Max Teachers (opt)");
         _slotsGrid.Columns.Add("IntervalCount", "Interval Count (optional)");
         _slotsGrid.Columns.Add("TeachersPerInterval", "Teachers per Interval (optional)");
     }
@@ -533,6 +539,8 @@ public sealed class RosterForm : Form
                 Subject = ReadString(row, "Subject"),
                 Venue = ReadString(row, "Venue"),
                 TeachersRequired = ParseInt(row, "TeachersRequired"),
+                MinTeachersRequired = ParseNullableInt(row, "MinTeachersRequired"),
+                MaxTeachersRequired = ParseNullableInt(row, "MaxTeachersRequired"),
                 LearnerCount = ParseNullableInt(row, "IntervalCount"),
                 LearnersPerInvigilator = ParseNullableInt(row, "TeachersPerInterval")
             });

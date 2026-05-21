@@ -4,9 +4,10 @@ public sealed class RosterGenerator
 {
     public RosterResult GenerateRoster(List<Teacher> teachers, List<ExamDutySlot> slots)
     {
+        var optimizedSlots = OptimizeSeniorSlotStaffing(teachers, slots);
         var result = new RosterResult();
-        var normalizedSlots = new List<ExamDutySlot>(slots.Count);
-        foreach (var slot in slots)
+        var normalizedSlots = new List<ExamDutySlot>(optimizedSlots.Count);
+        foreach (var slot in optimizedSlots)
         {
             var normalized = NormalizeSlotRules(slot);
             normalizedSlots.Add(normalized);
@@ -80,6 +81,55 @@ public sealed class RosterGenerator
         return result;
     }
 
+    private static List<ExamDutySlot> OptimizeSeniorSlotStaffing(List<Teacher> teachers, List<ExamDutySlot> slots)
+    {
+        var working = slots.Select(s => s).ToList();
+        var seniorIndexes = working
+            .Select((slot, idx) => new { slot, idx })
+            .Where(x => x.slot.Grade.Contains("10") || x.slot.Grade.Contains("11") || x.slot.Grade.Contains("12"))
+            .Select(x => x.idx)
+            .ToList();
+
+        if (seniorIndexes.Count == 0) return working;
+
+        var target = EstimateTargetMinutes(teachers, working);
+        foreach (var i in seniorIndexes)
+        {
+            var slot = working[i];
+            var minT = Math.Max(1, slot.MinTeachersRequired ?? slot.TeachersRequired);
+            var maxT = Math.Max(minT, slot.MaxTeachersRequired ?? slot.TeachersRequired);
+
+            var best = slot.TeachersRequired;
+            var bestScore = double.MaxValue;
+            for (var t = minT; t <= maxT; t++)
+            {
+                var projected = (double)t * slot.DurationMinutes;
+                var score = Math.Abs(projected - target);
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    best = t;
+                }
+            }
+
+            working[i] = new ExamDutySlot
+            {
+                Id = slot.Id, Date = slot.Date, StartTime = slot.StartTime, EndTime = slot.EndTime, ShiftType = slot.ShiftType,
+                Grade = slot.Grade, Subject = slot.Subject, Venue = slot.Venue,
+                TeachersRequired = best, MinTeachersRequired = slot.MinTeachersRequired, MaxTeachersRequired = slot.MaxTeachersRequired,
+                LearnerCount = slot.LearnerCount, LearnersPerInvigilator = slot.LearnersPerInvigilator
+            };
+        }
+
+        return working;
+    }
+
+    private static double EstimateTargetMinutes(List<Teacher> teachers, List<ExamDutySlot> slots)
+    {
+        var total = slots.Sum(s => Math.Max(1, s.TeachersRequired) * s.DurationMinutes);
+        return teachers.Count == 0 ? 0 : (double)total / teachers.Count;
+    }
+
     private static ExamDutySlot NormalizeSlotRules(ExamDutySlot slot)
     {
         var isLowerGrade = slot.Grade.Contains("8", StringComparison.OrdinalIgnoreCase)
@@ -107,6 +157,8 @@ public sealed class RosterGenerator
             Venue = slot.Venue,
             LearnerCount = slot.LearnerCount,
             LearnersPerInvigilator = slot.LearnersPerInvigilator,
+            MinTeachersRequired = slot.MinTeachersRequired,
+            MaxTeachersRequired = slot.MaxTeachersRequired,
             TeachersRequired = Math.Max(1, teachersRequired)
         };
     }
