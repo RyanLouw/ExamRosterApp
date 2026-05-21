@@ -66,14 +66,17 @@ public sealed class RosterForm : Form
         root.Controls.Add(outputGroup, 0, 3);
 
         Controls.Add(root);
-        LoadDataFromDatabase();
+        LoadDataFromDatabaseOrShowStatus();
     }
 
-    private void LoadDataFromDatabase()
+    private void LoadDataFromDatabaseOrShowStatus()
     {
-        var connectionString = Environment.GetEnvironmentVariable("EXAMROSTER_DB_CONNECTION");
+        var connectionString = ResolveConnectionString();
         if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            _outputBox.Text = "No database connection string found. Set EXAMROSTER_DB_CONNECTION or ConnectionStrings__ExamDb.";
             return;
+        }
 
         try
         {
@@ -82,11 +85,20 @@ public sealed class RosterForm : Form
 
             LoadTeachers(connection);
             LoadExamSlots(connection);
+
+            _outputBox.Text = $"Loaded {_teachersGrid.Rows.Cast<DataGridViewRow>().Count(r => !r.IsNewRow)} teachers and {_slotsGrid.Rows.Cast<DataGridViewRow>().Count(r => !r.IsNewRow)} exam slots from the database.";
         }
-        catch
+        catch (Exception ex)
         {
-            // Leave grids empty if database cannot be reached.
+            _outputBox.Text = $"Database load failed: {ex.Message}";
         }
+    }
+
+    private static string? ResolveConnectionString()
+    {
+        return Environment.GetEnvironmentVariable("EXAMROSTER_DB_CONNECTION")
+            ?? Environment.GetEnvironmentVariable("ConnectionStrings__ExamDb")
+            ?? Environment.GetEnvironmentVariable("ConnectionStrings:ExamDb");
     }
 
     private void LoadTeachers(SqlConnection connection)
