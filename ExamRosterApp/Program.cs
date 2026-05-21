@@ -20,6 +20,7 @@ public sealed class RosterForm : Form
 {
     private readonly DataGridView _teachersGrid = new();
     private readonly DataGridView _slotsGrid = new();
+    private readonly DataGridView _statsGrid = new();
     private readonly TextBox _outputBox = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, Dock = DockStyle.Fill };
 
     public RosterForm()
@@ -57,13 +58,23 @@ public sealed class RosterForm : Form
         ConfigureTeacherGrid();
         ConfigureSlotGrid();
 
-        var teacherGroup = new GroupBox { Text = "Teachers", Dock = DockStyle.Fill };
-        teacherGroup.Controls.Add(_teachersGrid);
-        root.Controls.Add(teacherGroup, 0, 1);
+        var tabs = new TabControl { Dock = DockStyle.Fill };
 
-        var slotGroup = new GroupBox { Text = "Exam Slots", Dock = DockStyle.Fill };
-        slotGroup.Controls.Add(_slotsGrid);
-        root.Controls.Add(slotGroup, 0, 2);
+        var teacherTab = new TabPage("Teachers");
+        teacherTab.Controls.Add(_teachersGrid);
+        tabs.TabPages.Add(teacherTab);
+
+        var slotTab = new TabPage("Exam Slots");
+        slotTab.Controls.Add(_slotsGrid);
+        tabs.TabPages.Add(slotTab);
+
+        ConfigureStatsGrid();
+        var statsTab = new TabPage("Teacher Stats");
+        statsTab.Controls.Add(_statsGrid);
+        tabs.TabPages.Add(statsTab);
+
+        root.SetRowSpan(tabs, 2);
+        root.Controls.Add(tabs, 0, 1);
 
         var outputGroup = new GroupBox { Text = "Generated Roster", Dock = DockStyle.Fill };
         outputGroup.Controls.Add(_outputBox);
@@ -297,8 +308,8 @@ public sealed class RosterForm : Form
             var teacherById = teachers.ToDictionary(t => t.Id);
 
             var sb = new StringBuilder();
-            sb.AppendLine("Date       Time        Shift      Subject                 Venue      Teacher");
-            sb.AppendLine("--------------------------------------------------------------------------------");
+            sb.AppendLine("Date       Time        Duration  Shift      Subject                 Venue      Teacher     Interval Plan");
+            sb.AppendLine("--------------------------------------------------------------------------------------------------------------");
 
             foreach (var assignment in result.Assignments
                          .OrderBy(a => slotById[a.ExamDutySlotId].Date)
@@ -307,7 +318,7 @@ public sealed class RosterForm : Form
             {
                 var slot = slotById[assignment.ExamDutySlotId];
                 var teacher = teacherById[assignment.TeacherId];
-                sb.AppendLine($"{slot.Date:yyyy-MM-dd} {slot.StartTime:HH:mm}-{slot.EndTime:HH:mm} {slot.ShiftType,-10} {slot.Subject,-22} {slot.Venue,-10} {teacher.FullName}");
+                sb.AppendLine($"{slot.Date:yyyy-MM-dd} {slot.StartTime:HH:mm}-{slot.EndTime:HH:mm} {slot.DurationMinutes,4}m    {slot.ShiftType,-10} {slot.Subject,-22} {slot.Venue,-10} {teacher.FullName,-12} {BuildIntervalPlan(slot)}");
             }
 
             if (result.Warnings.Count > 0)
@@ -321,6 +332,7 @@ public sealed class RosterForm : Form
             }
 
             _outputBox.Text = sb.ToString();
+            PopulateTeacherStatsGrid(teachers, slots, result.Assignments);
         }
         catch (Exception ex)
         {
@@ -366,8 +378,8 @@ public sealed class RosterForm : Form
             var csv = new StringBuilder();
             csv.AppendLine(string.Join(delimiter, new[]
             {
-                Csv("Teacher", delimiter), Csv("Date", delimiter), Csv("Start", delimiter), Csv("End", delimiter),
-                Csv("Shift", delimiter), Csv("Grade", delimiter), Csv("Subject", delimiter), Csv("Venue", delimiter)
+                Csv("Teacher", delimiter), Csv("Date", delimiter), Csv("Start", delimiter), Csv("End", delimiter), Csv("DurationMinutes", delimiter),
+                Csv("Shift", delimiter), Csv("Grade", delimiter), Csv("Subject", delimiter), Csv("Venue", delimiter), Csv("IntervalPlan", delimiter)
             }));
 
             foreach (var assignment in result.Assignments
@@ -380,8 +392,8 @@ public sealed class RosterForm : Form
                 csv.AppendLine(string.Join(delimiter, new[]
                 {
                     Csv(teacher.FullName, delimiter), Csv(slot.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), delimiter),
-                    Csv(slot.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture), delimiter), Csv(slot.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture), delimiter),
-                    Csv(slot.ShiftType.ToString(), delimiter), Csv(slot.Grade, delimiter), Csv(slot.Subject, delimiter), Csv(slot.Venue, delimiter)
+                    Csv(slot.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture), delimiter), Csv(slot.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture), delimiter), Csv(slot.DurationMinutes.ToString(CultureInfo.InvariantCulture), delimiter),
+                    Csv(slot.ShiftType.ToString(), delimiter), Csv(slot.Grade, delimiter), Csv(slot.Subject, delimiter), Csv(slot.Venue, delimiter), Csv(BuildIntervalPlan(slot), delimiter)
                 }));
             }
 
@@ -403,6 +415,57 @@ public sealed class RosterForm : Form
             || escaped.Contains("\r", StringComparison.Ordinal);
 
         return needsQuotes ? $"\"{escaped}\"" : escaped;
+    }
+
+    private void ConfigureStatsGrid()
+    {
+        _statsGrid.Dock = DockStyle.Fill;
+        _statsGrid.ReadOnly = true;
+        _statsGrid.AllowUserToAddRows = false;
+        _statsGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        _statsGrid.Columns.Add("Teacher", "Teacher");
+        _statsGrid.Columns.Add("TotalDuties", "Total Duties");
+        _statsGrid.Columns.Add("TotalHours", "Total Hours");
+        _statsGrid.Columns.Add("MorningHours", "Morning Hours");
+        _statsGrid.Columns.Add("AfternoonHours", "Afternoon Hours");
+    }
+
+    private void PopulateTeacherStatsGrid(List<Teacher> teachers, List<ExamDutySlot> slots, List<DutyAssignment> assignments)
+    {
+        _statsGrid.Rows.Clear();
+        var teacherById = teachers.ToDictionary(t => t.Id);
+        var slotById = slots.ToDictionary(s => s.Id);
+
+        foreach (var group in assignments.GroupBy(a => a.TeacherId).OrderBy(g => teacherById[g.Key].FullName))
+        {
+            var assignedSlots = group.Select(a => slotById[a.ExamDutySlotId]).ToList();
+            var totalMinutes = assignedSlots.Sum(s => s.DurationMinutes);
+            var morningMinutes = assignedSlots.Where(s => s.ShiftType == ShiftType.Morning).Sum(s => s.DurationMinutes);
+            var afternoonMinutes = assignedSlots.Where(s => s.ShiftType == ShiftType.Afternoon).Sum(s => s.DurationMinutes);
+
+            _statsGrid.Rows.Add(
+                teacherById[group.Key].FullName,
+                assignedSlots.Count,
+                FormatHours(totalMinutes),
+                FormatHours(morningMinutes),
+                FormatHours(afternoonMinutes));
+        }
+    }
+
+    private static string FormatHours(int minutes)
+        => $"{minutes / 60}h {minutes % 60}m";
+
+    private static string BuildIntervalPlan(ExamDutySlot slot)
+    {
+        var intervalCount = slot.LearnerCount.GetValueOrDefault();
+        var teachersPerInterval = slot.LearnersPerInvigilator.GetValueOrDefault();
+
+        if (intervalCount <= 0)
+            return "Single interval (full test)";
+
+        var intervalMinutes = Math.Max(1, slot.DurationMinutes / intervalCount);
+        var teacherText = teachersPerInterval > 0 ? $", {teachersPerInterval} teacher(s)/interval" : string.Empty;
+        return $"{intervalCount} interval(s) x {intervalMinutes} min{teacherText}";
     }
 
     private List<Teacher> ReadTeachers()
