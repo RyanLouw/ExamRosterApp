@@ -4,6 +4,32 @@ public sealed class RosterGenerator
 {
     public RosterResult GenerateRoster(List<Teacher> teachers, List<ExamDutySlot> slots)
     {
+        var multiRunResult = GenerateBestOfMultipleRuns(teachers, slots);
+        multiRunResult.Diagnostics.Insert(0, $"Multi-run mode: tried 20 variants, picked best spread={multiRunResult.FairnessSpreadMinutes} minutes.");
+        return multiRunResult;
+    }
+
+    private RosterResult GenerateBestOfMultipleRuns(List<Teacher> teachers, List<ExamDutySlot> slots)
+    {
+        RosterResult? best = null;
+        var attempts = 20;
+
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            var result = GenerateSingleRun(teachers, slots, attempt);
+            if (best is null
+                || result.FairnessSpreadMinutes < best.FairnessSpreadMinutes
+                || (result.FairnessSpreadMinutes == best.FairnessSpreadMinutes && result.Warnings.Count < best.Warnings.Count))
+            {
+                best = result;
+            }
+        }
+
+        return best ?? new RosterResult();
+    }
+
+    private RosterResult GenerateSingleRun(List<Teacher> teachers, List<ExamDutySlot> slots, int seed)
+    {
         var optimizedSlots = OptimizeSeniorSlotStaffing(teachers, slots);
         var result = new RosterResult();
         var normalizedSlots = new List<ExamDutySlot>(optimizedSlots.Count);
@@ -29,6 +55,7 @@ public sealed class RosterGenerator
             .OrderByDescending(GetDifficulty)
             .ThenBy(s => s.Date)
             .ThenBy(s => s.StartTime)
+            .ThenBy(s => StableHash($"{seed}-{s.Id}-{s.Subject}"))
             .ToList();
 
         foreach (var slot in orderedSlots)
@@ -48,6 +75,7 @@ public sealed class RosterGenerator
                     .OrderBy(x => x.ProjectedMinutes)
                     .ThenBy(x => x.ProjectedDuties)
                     .ThenBy(x => x.Score)
+                    .ThenBy(x => StableHash($"{seed}-{slot.Id}-{x.Teacher.Id}"))
                     .ThenBy(x => x.Teacher.FullName, StringComparer.InvariantCulture)
                     .ToList();
 
@@ -74,11 +102,23 @@ public sealed class RosterGenerator
         var avgMinutes = teachers.Count == 0 ? 0 : totalAssignedMinutes / (double)teachers.Count;
         var maxMinutes = totals.Values.DefaultIfEmpty(0).Max();
         var minMinutes = totals.Values.DefaultIfEmpty(0).Min();
+        result.FairnessSpreadMinutes = maxMinutes - minMinutes;
         result.Diagnostics.Add(
             $"Fairness math: totalAssignedMinutes={totalAssignedMinutes}, teachers={teachers.Count}, " +
             $"averageMinutes={avgMinutes:F2}, minMinutes={minMinutes}, maxMinutes={maxMinutes}, diff={maxMinutes - minMinutes}.");
         result.Diagnostics.Add($"Final fairness spread minutes: min={totals.Values.Min()}, max={totals.Values.Max()}, diff={totals.Values.Max() - totals.Values.Min()}");
         return result;
+    }
+
+    private static int StableHash(string text)
+    {
+        unchecked
+        {
+            var hash = 23;
+            foreach (var c in text)
+                hash = (hash * 31) + c;
+            return hash;
+        }
     }
 
     private static List<ExamDutySlot> OptimizeSeniorSlotStaffing(List<Teacher> teachers, List<ExamDutySlot> slots)
