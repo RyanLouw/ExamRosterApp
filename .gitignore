@@ -1,18 +1,31 @@
-# Build outputs
-**/bin/
-**/obj/
+# Build output
+bin/
+obj/
+out/
 
 # User-specific files
 *.user
 *.suo
+*.userosscache
+*.sln.docstates
 
-# Logs
-*.log
-
-# IDE settings
+# IDE / editor
 .vs/
 .vscode/
 .idea/
+
+# Logs and diagnostics
+*.log
+*.tmp
+*.cache
+
+# NuGet
+*.nupkg
+packages/
+
+# Test results
+TestResults/
+*.trx
 
 # OS files
 .DS_Store
