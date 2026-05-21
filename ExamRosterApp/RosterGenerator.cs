@@ -45,6 +45,7 @@ public sealed class RosterGenerator
             }
         }
 
+        RebalanceForFairness(result.Assignments, teachers, slotById);
         ValidateHardConstraints(result.Assignments, teachers, slotById, result.Warnings);
         return result;
     }
@@ -58,10 +59,10 @@ public sealed class RosterGenerator
             ? 1
             : slot.TeachersRequired;
 
-        if (slot.LearnerCount is > 0 && slot.LearnersPerInvigilator is > 0)
+        if (slot.LearnerCount is > 0 && slot.LearnersPerInvigilator is > 0 && !isLowerGrade)
         {
-            var byCount = (int)Math.Ceiling((double)slot.LearnerCount.Value / slot.LearnersPerInvigilator.Value);
-            teachersRequired = Math.Max(teachersRequired, byCount);
+            var byIntervals = slot.LearnerCount.Value * slot.LearnersPerInvigilator.Value;
+            teachersRequired = Math.Max(teachersRequired, byIntervals);
         }
 
         return new ExamDutySlot
@@ -131,21 +132,18 @@ public sealed class RosterGenerator
 
     private static int CalculateTeacherScore(Teacher teacher, ExamDutySlot slot, TeacherDutyStats stats)
     {
-        var score = stats.TotalMinutes;
+        var score = stats.TotalMinutes * 3;
 
         if (teacher.MinDutyMinutes is not null && stats.TotalMinutes < teacher.MinDutyMinutes.Value)
-        {
-            score -= 100;
-            score -= (teacher.MinDutyMinutes.Value - stats.TotalMinutes) / 10;
-        }
+            score -= 300;
 
         if (teacher.Group == TeacherGroup.SecondaryNonPriority)
             score += 150;
 
         score += slot.ShiftType switch
         {
-            ShiftType.Morning => stats.MorningMinutes * 2,
-            ShiftType.Afternoon => stats.AfternoonMinutes * 2,
+            ShiftType.Morning => stats.MorningMinutes,
+            ShiftType.Afternoon => stats.AfternoonMinutes,
             _ => 0
         };
 
@@ -159,9 +157,8 @@ public sealed class RosterGenerator
                 score += 50;
         }
 
-        // Keep people from receiving zero duties when avoidable.
         if (stats.TotalDuties == 0)
-            score -= 40;
+            score -= 100;
 
         return score;
     }
@@ -178,6 +175,49 @@ public sealed class RosterGenerator
             stats.MorningMinutes += slot.DurationMinutes;
         else
             stats.AfternoonMinutes += slot.DurationMinutes;
+    }
+
+    private static void RebalanceForFairness(
+        List<DutyAssignment> assignments,
+        List<Teacher> teachers,
+        IReadOnlyDictionary<int, ExamDutySlot> slots)
+    {
+        for (var pass = 0; pass < 6; pass++)
+        {
+            var totals = teachers.ToDictionary(t => t.Id, t => assignments
+                .Where(a => a.TeacherId == t.Id)
+                .Select(a => slots[a.ExamDutySlotId].DurationMinutes)
+                .Sum());
+
+            var mostLoaded = teachers.OrderByDescending(t => totals[t.Id]).First();
+            var leastLoaded = teachers.OrderBy(t => totals[t.Id]).First();
+
+            if (totals[mostLoaded.Id] - totals[leastLoaded.Id] <= 60)
+                return;
+
+            var candidate = assignments
+                .Where(a => a.TeacherId == mostLoaded.Id)
+                .Select(a => new { Assignment = a, Slot = slots[a.ExamDutySlotId] })
+                .OrderByDescending(x => x.Slot.DurationMinutes)
+                .FirstOrDefault(x => CanSwapToTeacher(leastLoaded, x.Slot, assignments, slots, x.Assignment));
+
+            if (candidate is null)
+                return;
+
+            assignments.Remove(candidate.Assignment);
+            assignments.Add(new DutyAssignment { TeacherId = leastLoaded.Id, ExamDutySlotId = candidate.Assignment.ExamDutySlotId });
+        }
+    }
+
+    private static bool CanSwapToTeacher(
+        Teacher teacher,
+        ExamDutySlot slot,
+        List<DutyAssignment> currentAssignments,
+        IReadOnlyDictionary<int, ExamDutySlot> allSlots,
+        DutyAssignment assignmentToReplace)
+    {
+        var reduced = currentAssignments.Where(a => !ReferenceEquals(a, assignmentToReplace)).ToList();
+        return CanAssignTeacher(teacher, slot, reduced, allSlots);
     }
 
     private static void ValidateHardConstraints(
