@@ -193,8 +193,7 @@ public sealed class RosterForm : Form
                 Convert.ToInt32(reader["TeachersRequired"]),
                 string.Empty,
                 string.Empty,
-                reader["LearnerCount"] is DBNull ? string.Empty : reader["LearnerCount"],
-                reader["LearnersPerInvigilator"] is DBNull ? string.Empty : reader["LearnersPerInvigilator"]);
+                reader["LearnerCount"] is DBNull ? string.Empty : reader["LearnerCount"]);
 
             loaded++;
         }
@@ -230,7 +229,6 @@ public sealed class RosterForm : Form
                 reader["Subject"].ToString() ?? string.Empty,
                 "TBD",
                 1,
-                string.Empty,
                 string.Empty,
                 string.Empty,
                 string.Empty);
@@ -300,7 +298,20 @@ public sealed class RosterForm : Form
         _slotsGrid.Columns.Add("MinTeachersRequired", "Min Teachers (opt)");
         _slotsGrid.Columns.Add("MaxTeachersRequired", "Max Teachers (opt)");
         _slotsGrid.Columns.Add("IntervalCount", "Interval Count (optional)");
-        _slotsGrid.Columns.Add("TeachersPerInterval", "Teachers per Interval (optional)");
+        _slotsGrid.CellBeginEdit += (_, e) =>
+        {
+            if (e.RowIndex < 0) return;
+            var grade = _slotsGrid.Rows[e.RowIndex].Cells["Grade"].Value?.ToString() ?? string.Empty;
+            var isJunior = grade.Contains("8", StringComparison.OrdinalIgnoreCase) || grade.Contains("9", StringComparison.OrdinalIgnoreCase);
+            if (!isJunior) return;
+
+            var column = _slotsGrid.Columns[e.ColumnIndex].Name;
+            if (column is "TeachersRequired" or "MinTeachersRequired" or "MaxTeachersRequired" or "IntervalCount")
+            {
+                e.Cancel = true;
+                MessageBox.Show("Grade 8/9 staffing is locked to 1 teacher and 1 interval.", "Locked for Grade 8/9", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        };
     }
 
     private void GenerateRoster()
@@ -490,14 +501,11 @@ public sealed class RosterForm : Form
     private static string BuildIntervalPlan(ExamDutySlot slot)
     {
         var intervalCount = slot.LearnerCount.GetValueOrDefault();
-        var teachersPerInterval = slot.LearnersPerInvigilator.GetValueOrDefault();
-
         if (intervalCount <= 0)
             return "Single interval (full test)";
 
         var intervalMinutes = Math.Max(1, slot.DurationMinutes / intervalCount);
-        var teacherText = teachersPerInterval > 0 ? $", {teachersPerInterval} teacher(s)/interval" : string.Empty;
-        return $"{intervalCount} interval(s) x {intervalMinutes} min{teacherText}";
+        return $"{intervalCount} interval(s) x {intervalMinutes} min";
     }
 
     private List<Teacher> ReadTeachers()
@@ -542,7 +550,7 @@ public sealed class RosterForm : Form
                 MinTeachersRequired = ParseNullableInt(row, "MinTeachersRequired"),
                 MaxTeachersRequired = ParseNullableInt(row, "MaxTeachersRequired"),
                 LearnerCount = ParseNullableInt(row, "IntervalCount"),
-                LearnersPerInvigilator = ParseNullableInt(row, "TeachersPerInterval")
+                LearnersPerInvigilator = null
             });
         }
         return list;

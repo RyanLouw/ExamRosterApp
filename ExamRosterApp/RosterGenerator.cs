@@ -139,11 +139,14 @@ public sealed class RosterGenerator
             ? 1
             : slot.TeachersRequired;
 
-        if (slot.LearnerCount is > 0 && slot.LearnersPerInvigilator is > 0 && !isLowerGrade)
-        {
-            var byTeachersPerInterval = slot.LearnersPerInvigilator.Value;
-            teachersRequired = Math.Max(teachersRequired, byTeachersPerInterval);
-        }
+        if (!isLowerGrade && slot.MaxTeachersRequired is not null)
+            teachersRequired = Math.Min(teachersRequired, slot.MaxTeachersRequired.Value);
+        if (!isLowerGrade && slot.MinTeachersRequired is not null)
+            teachersRequired = Math.Max(teachersRequired, slot.MinTeachersRequired.Value);
+
+        var intervalCount = slot.LearnerCount;
+        if (!isLowerGrade && intervalCount is null or <= 0)
+            intervalCount = Math.Max(1, (int)Math.Ceiling(slot.DurationMinutes / 120.0)); // max 2h per interval
 
         return new ExamDutySlot
         {
@@ -155,11 +158,11 @@ public sealed class RosterGenerator
             Grade = slot.Grade,
             Subject = slot.Subject,
             Venue = slot.Venue,
-            LearnerCount = slot.LearnerCount,
-            LearnersPerInvigilator = slot.LearnersPerInvigilator,
+            LearnerCount = isLowerGrade ? 1 : intervalCount,
+            LearnersPerInvigilator = null,
             MinTeachersRequired = slot.MinTeachersRequired,
             MaxTeachersRequired = slot.MaxTeachersRequired,
-            TeachersRequired = Math.Max(1, teachersRequired)
+            TeachersRequired = isLowerGrade ? 1 : Math.Max(1, teachersRequired)
         };
     }
 
