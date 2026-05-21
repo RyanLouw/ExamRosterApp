@@ -21,6 +21,28 @@ BEGIN
     );
 END
 
+IF OBJECT_ID('tr.Teacher','U') IS NOT NULL
+AND COL_LENGTH('tr.Teacher','TeacherGroupId') IS NULL
+BEGIN
+    ALTER TABLE tr.Teacher
+    ADD TeacherGroupId INT NOT NULL
+        CONSTRAINT DF_Teacher_TeacherGroupId DEFAULT ((1));
+END
+
+IF OBJECT_ID('tr.Teacher','U') IS NOT NULL
+AND COL_LENGTH('tr.Teacher','MinDutyMinutes') IS NULL
+BEGIN
+    ALTER TABLE tr.Teacher
+    ADD MinDutyMinutes INT NULL;
+END
+
+IF OBJECT_ID('tr.Teacher','U') IS NOT NULL
+AND COL_LENGTH('tr.Teacher','MaxDutyMinutes') IS NULL
+BEGIN
+    ALTER TABLE tr.Teacher
+    ADD MaxDutyMinutes INT NULL;
+END
+
 IF NOT EXISTS (
     SELECT 1
     FROM sys.default_constraints dc
@@ -34,6 +56,58 @@ BEGIN
     DEFAULT (SYSUTCDATETIME()) FOR ChangedOn;
 END
 
+IF OBJECT_ID('tr.Teacher','U') IS NOT NULL
+AND NOT EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = 'CK_Teacher_TeacherGroupId'
+      AND parent_object_id = OBJECT_ID('tr.Teacher')
+)
+BEGIN
+    ALTER TABLE tr.Teacher
+    ADD CONSTRAINT CK_Teacher_TeacherGroupId
+    CHECK (TeacherGroupId IN (1, 2, 3));
+END
+
+IF OBJECT_ID('tr.Teacher','U') IS NOT NULL
+AND NOT EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = 'CK_Teacher_MinDutyMinutes'
+      AND parent_object_id = OBJECT_ID('tr.Teacher')
+)
+BEGIN
+    ALTER TABLE tr.Teacher
+    ADD CONSTRAINT CK_Teacher_MinDutyMinutes
+    CHECK (MinDutyMinutes IS NULL OR MinDutyMinutes >= 0);
+END
+
+IF OBJECT_ID('tr.Teacher','U') IS NOT NULL
+AND NOT EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = 'CK_Teacher_MaxDutyMinutes'
+      AND parent_object_id = OBJECT_ID('tr.Teacher')
+)
+BEGIN
+    ALTER TABLE tr.Teacher
+    ADD CONSTRAINT CK_Teacher_MaxDutyMinutes
+    CHECK (MaxDutyMinutes IS NULL OR MaxDutyMinutes >= 0);
+END
+
+IF OBJECT_ID('tr.Teacher','U') IS NOT NULL
+AND NOT EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = 'CK_Teacher_MinMaxDutyMinutes'
+      AND parent_object_id = OBJECT_ID('tr.Teacher')
+)
+BEGIN
+    ALTER TABLE tr.Teacher
+    ADD CONSTRAINT CK_Teacher_MinMaxDutyMinutes
+    CHECK (MinDutyMinutes IS NULL OR MaxDutyMinutes IS NULL OR MaxDutyMinutes >= MinDutyMinutes);
+END
+
 
 /* =========================
    TEACHER
@@ -44,21 +118,49 @@ IF OBJECT_ID('tr.Teacher','U') IS NULL
 BEGIN
     CREATE TABLE tr.Teacher
     (
-        TeacherId INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+TeacherId INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
 
-        FullName VARCHAR(200) NOT NULL,
+PositionNumber INT NULL,
 
-        CanWorkMorning BIT NOT NULL,
-        CanWorkAfternoon BIT NOT NULL,
+FullName NVARCHAR(200) NOT NULL,
 
-        IsActive BIT NOT NULL,
+        CanWorkMorning BIT NOT NULL
+            CONSTRAINT DF_Teacher_CanWorkMorning DEFAULT ((1)),
 
-        CreatedOn DATETIME2(0) NOT NULL,
+        CanWorkAfternoon BIT NOT NULL
+            CONSTRAINT DF_Teacher_CanWorkAfternoon DEFAULT ((1)),
+
+        TeacherGroupId INT NOT NULL
+            CONSTRAINT DF_Teacher_TeacherGroupId DEFAULT ((1)),
+
+        MinDutyMinutes INT NULL,
+        MaxDutyMinutes INT NULL,
+
+        IsActive BIT NOT NULL
+            CONSTRAINT DF_Teacher_IsActive DEFAULT ((1)),
+
+        CreatedOn DATETIME2(0) NOT NULL
+            CONSTRAINT DF_Teacher_CreatedOn DEFAULT (SYSUTCDATETIME()),
+
         CreatedBy VARCHAR(100) NOT NULL,
 
         UpdatedOn DATETIME2(0) NULL,
         UpdatedBy VARCHAR(100) NULL
     );
+END
+
+IF OBJECT_ID('tr.ExamDutySlot','U') IS NOT NULL
+AND COL_LENGTH('tr.ExamDutySlot','LearnerCount') IS NULL
+BEGIN
+    ALTER TABLE tr.ExamDutySlot
+    ADD LearnerCount INT NULL;
+END
+
+IF OBJECT_ID('tr.ExamDutySlot','U') IS NOT NULL
+AND COL_LENGTH('tr.ExamDutySlot','LearnersPerInvigilator') IS NULL
+BEGIN
+    ALTER TABLE tr.ExamDutySlot
+    ADD LearnersPerInvigilator INT NULL;
 END
 
 IF COL_LENGTH('tr.Teacher','CanWorkMorning') IS NOT NULL
@@ -73,6 +175,32 @@ BEGIN
     ALTER TABLE tr.Teacher
     ADD CONSTRAINT DF_Teacher_CanWorkMorning
     DEFAULT ((1)) FOR CanWorkMorning;
+END
+
+IF OBJECT_ID('tr.ExamDutySlot','U') IS NOT NULL
+AND NOT EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = 'CK_ExamDutySlot_LearnerCount'
+      AND parent_object_id = OBJECT_ID('tr.ExamDutySlot')
+)
+BEGIN
+    ALTER TABLE tr.ExamDutySlot
+    ADD CONSTRAINT CK_ExamDutySlot_LearnerCount
+    CHECK (LearnerCount IS NULL OR LearnerCount > 0);
+END
+
+IF OBJECT_ID('tr.ExamDutySlot','U') IS NOT NULL
+AND NOT EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = 'CK_ExamDutySlot_LearnersPerInvigilator'
+      AND parent_object_id = OBJECT_ID('tr.ExamDutySlot')
+)
+BEGIN
+    ALTER TABLE tr.ExamDutySlot
+    ADD CONSTRAINT CK_ExamDutySlot_LearnersPerInvigilator
+    CHECK (LearnersPerInvigilator IS NULL OR LearnersPerInvigilator > 0);
 END
 
 IF COL_LENGTH('tr.Teacher','CanWorkAfternoon') IS NOT NULL
@@ -137,6 +265,19 @@ IF NOT EXISTS (
 BEGIN
     CREATE INDEX IX_Teacher_IsActive
     ON tr.Teacher(IsActive);
+END
+
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'UX_Teacher_PositionNumber'
+      AND object_id = OBJECT_ID('tr.Teacher')
+)
+BEGIN
+    CREATE UNIQUE INDEX UX_Teacher_PositionNumber
+    ON tr.Teacher(PositionNumber)
+    WHERE PositionNumber IS NOT NULL;
 END
 
 
@@ -246,6 +387,8 @@ BEGIN
         ShiftTypeId INT NOT NULL,
 
         TeachersRequired INT NOT NULL,
+        LearnerCount INT NULL,
+        LearnersPerInvigilator INT NULL,
 
         IsActive BIT NOT NULL,
 
@@ -635,41 +778,95 @@ IF NOT EXISTS (SELECT 1 FROM tr.Teacher)
 BEGIN
     INSERT INTO tr.Teacher
     (
+        PositionNumber,
         FullName,
         CanWorkMorning,
         CanWorkAfternoon,
+        TeacherGroupId,
+        MinDutyMinutes,
+        MaxDutyMinutes,
         IsActive,
         CreatedOn,
         CreatedBy
     )
     VALUES
-    ('Mrs Smith', 1, 1, 1, SYSUTCDATETIME(), 'seed'),
-    ('Mr Jones', 1, 0, 1, SYSUTCDATETIME(), 'seed'),
-    ('Mrs Botha', 1, 1, 1, SYSUTCDATETIME(), 'seed'),
-    ('Mr Naidoo', 0, 1, 1, SYSUTCDATETIME(), 'seed'),
-    ('Mrs Van Wyk', 1, 1, 1, SYSUTCDATETIME(), 'seed');
+    (1, N'Theron Me S Susan', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (3, N'Van Staden Me H Hanlie', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (4, N'Barnes Me J Jealandri', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (5, N'Van Deventer Me M Malize', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (6, N'Smith Me A Anandi', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (7, N'Badenhorst Me K Karin', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (8, N'Bodenstein Mnr F Francois', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (9, N'Bodenstein Me J Jessica', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (10, N'Potgieter Me M Megan', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (11, N'De Bruin Me L Liezel', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (12, N'Massyn Mnr F Franco', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (13, N'Botha Me M Marietjie', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (14, N'De Klerk Me Z Zané', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (15, N'Stolp Mnr A Andries', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (16, N'Neethling Mnr D Danjue', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (17, N'Du Plessis Mnr D Delaney', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (18, N'Ludick Me C Corlia', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (19, N'Gouws Me B Bianca', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (20, N'Visser Me N Nicola', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (21, N'Steyn Mnr R Ruan', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (22, N'JvRensburg Me Z Zelmarie', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (23, N'Van Dyk Me L Lize', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (24, N'Van Blerk Me Stefni', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (25, N'Doman Mnr B Brian', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (26, N'Pretorius Me M Mariana', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (27, N'Booysen Mnr L Leon', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (28, N'Stolp Me P J Tinkie', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (29, N'Nel Me J Johani', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (30, N'Jacobs Me M Maliza', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (31, N'Bezuidenhout Me L Liezell', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (32, N'Jordaan Me T Tasmin', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (33, N'Botha Me A Anja', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (34, N'Viljoen Me N Nelmarie', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (35, N'Edwards Me M Marietha', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (36, N'Louw Me H Hesrie', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (37, N'Bosman Me S Susan', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (38, N'Grové Me M Melanie', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (39, N'Labuschagne Me C Chardoné', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (40, N'Potgieter Chalsey', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (41, N'Matthee Me L Liezl', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (42, N'Botha Me J Janine', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (43, N'Van Der Meulen Me L Larissa', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (44, N'Pfeil Me N Natasja', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (45, N'Grahan Me S Shay', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (46, N'Jonkers Me B Rhodé', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (47, N'Redelinghuys Mnr J Jaco', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (48, N'Barnard Me A Annene', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (49, N'Haasbroek Me M Mariane', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (50, N'Smit Mnr W Willem', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (51, N'Van Aswegen Mnr HJ HJ', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (52, N'Louwrens Mnr E Erik', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (53, N'Van der Walt Me R Ria', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (54, N'Stolp Me M Marli', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (55, N'Venter Me C Christel', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (56, N'Visser Me S Shanté', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (57, N'De Villiers Me A Allison', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (58, N'Martins Me M Mara', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (59, N'Botha Me C Chené', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (60, N'Steyn Me L Linde', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (61, N'Ferreira Me T Tanika', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (62, N'Steyn Me M Maryke', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (63, N'Groenveld Mnr R Rikus', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (64, N'Louw Me N Nicole', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (65, N'Du Plessis Me D Dijani', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (66, N'Eksteen Me L Lecrisha', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (67, N'Desmore Mnr R Ruan', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (68, N'Van der Westhuizen Me Z Zelna', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (69, N'Van Emmenis Me A Annika', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (70, N'Geldenhuys Me J Juané', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (71, N'Boshoff Mnr J Jacques', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (72, N'Du Plessis Me M Maria', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (73, N'Jordan Me Chanel', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (80, N'Brits Me A Amoné', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (81, N'Stotter Me C Charlize', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (82, N'De Wet Me N Ninette', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (83, N'Rademeyer Me S Shani', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (84, N'Brits Me A Amone', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed'),
+    (85, N'Hammond Me C Caylin', 1, 1, 1, NULL, NULL, 1, SYSUTCDATETIME(), 'real-seed');
 END
 
-IF NOT EXISTS (SELECT 1 FROM tr.ExamDutySlot)
-BEGIN
-    INSERT INTO tr.ExamDutySlot
-    (
-        [Date],
-        StartTime,
-        EndTime,
-        Grade,
-        [Subject],
-        Venue,
-        ShiftTypeId,
-        TeachersRequired,
-        IsActive,
-        CreatedOn,
-        CreatedBy
-    )
-    VALUES
-    ('2026-06-01', '08:00', '10:00', 'Grade 8', 'Mathematics', 'Hall A', 1, 2, 1, SYSUTCDATETIME(), 'seed'),
-    ('2026-06-01', '08:00', '10:00', 'Grade 9', 'English', 'Room 12', 1, 1, 1, SYSUTCDATETIME(), 'seed'),
-    ('2026-06-01', '13:00', '15:00', 'Grade 10', 'Science', 'Hall B', 2, 2, 1, SYSUTCDATETIME(), 'seed'),
-    ('2026-06-02', '08:00', '10:30', 'Grade 11', 'Accounting', 'Room 20', 1, 2, 1, SYSUTCDATETIME(), 'seed'),
-    ('2026-06-02', '13:00', '15:30', 'Grade 12', 'History', 'Hall A', 2, 2, 1, SYSUTCDATETIME(), 'seed');
-END

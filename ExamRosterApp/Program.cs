@@ -1,4 +1,5 @@
 using System.Text;
+using System.Data.SqlClient;
 using System.Windows.Forms;
 using ExamRosterApp.Rostering;
 
@@ -65,7 +66,62 @@ public sealed class RosterForm : Form
         root.Controls.Add(outputGroup, 0, 3);
 
         Controls.Add(root);
-        SeedSampleData();
+        LoadTeachersFromDatabaseOrSeed();
+    }
+
+    private void LoadTeachersFromDatabaseOrSeed()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("EXAMROSTER_DB_CONNECTION");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            SeedSampleData();
+            return;
+        }
+
+        try
+        {
+            using var connection = new SqlConnection(connectionString);
+            connection.Open();
+
+            using var command = connection.CreateCommand();
+            command.CommandText = @"
+                SELECT TeacherId, FullName, CanWorkMorning, CanWorkAfternoon, IsActive,
+                       ISNULL(TeacherGroupId, 1) AS TeacherGroupId,
+                       MinDutyMinutes, MaxDutyMinutes
+                FROM tr.Teacher
+                WHERE IsActive = 1
+                ORDER BY FullName;";
+
+            using var reader = command.ExecuteReader();
+            var loadedAny = false;
+
+            while (reader.Read())
+            {
+                loadedAny = true;
+                var groupId = Convert.ToInt32(reader["TeacherGroupId"]);
+                var groupName = Enum.IsDefined(typeof(TeacherGroup), groupId)
+                    ? ((TeacherGroup)groupId).ToString()
+                    : TeacherGroup.Open.ToString();
+
+                _teachersGrid.Rows.Add(
+                    Convert.ToInt32(reader["TeacherId"]),
+                    reader["FullName"].ToString() ?? string.Empty,
+                    groupName,
+                    Convert.ToBoolean(reader["CanWorkMorning"]),
+                    Convert.ToBoolean(reader["CanWorkAfternoon"]),
+                    string.Empty,
+                    reader["MinDutyMinutes"] is DBNull ? string.Empty : reader["MinDutyMinutes"],
+                    reader["MaxDutyMinutes"] is DBNull ? string.Empty : reader["MaxDutyMinutes"],
+                    "-");
+            }
+
+            if (!loadedAny)
+                SeedSampleData();
+        }
+        catch
+        {
+            SeedSampleData();
+        }
     }
 
     private void ConfigureTeacherGrid()
@@ -75,9 +131,18 @@ public sealed class RosterForm : Form
         _teachersGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _teachersGrid.Columns.Add("Id", "Id");
         _teachersGrid.Columns.Add("FullName", "Teacher Name");
+        var teacherGroupColumn = new DataGridViewComboBoxColumn
+        {
+            Name = "Group",
+            HeaderText = "Group",
+            DataSource = Enum.GetNames(typeof(TeacherGroup))
+        };
+        _teachersGrid.Columns.Add(teacherGroupColumn);
         _teachersGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "CanWorkMorning", HeaderText = "Can Work Morning" });
         _teachersGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "CanWorkAfternoon", HeaderText = "Can Work Afternoon" });
         _teachersGrid.Columns.Add("HomeSubject", "Home Subject");
+        _teachersGrid.Columns.Add("MinDutyMinutes", "Min Duty Minutes (optional)");
+        _teachersGrid.Columns.Add("MaxDutyMinutes", "Max Duty Minutes (optional)");
         _teachersGrid.Columns.Add("Unavailable", "Unavailable (yyyy-MM-dd|HH:mm-HH:mm;...) ");
     }
 
@@ -103,18 +168,20 @@ public sealed class RosterForm : Form
         _slotsGrid.Columns.Add("Subject", "Subject");
         _slotsGrid.Columns.Add("Venue", "Venue");
         _slotsGrid.Columns.Add("TeachersRequired", "Teachers Required");
+        _slotsGrid.Columns.Add("LearnerCount", "Learner Count (optional)");
+        _slotsGrid.Columns.Add("LearnersPerInvigilator", "Learners per Invigilator (optional)");
     }
 
     private void SeedSampleData()
     {
-        _teachersGrid.Rows.Add(1, "Mrs Smith", true, true, "Maths", "2026-06-01|10:00-11:00");
-        _teachersGrid.Rows.Add(2, "Mr Jones", true, false, "", "-");
-        _teachersGrid.Rows.Add(3, "Mrs Botha", false, true, "", "-");
-        _teachersGrid.Rows.Add(4, "Ms Patel", true, true, "", "-");
+        _teachersGrid.Rows.Add(1, "Mrs Smith", "Open", true, true, "Maths", 120, 240, "2026-06-01|10:00-11:00");
+        _teachersGrid.Rows.Add(2, "Mr Jones", "SecondaryNonPriority", true, false, "", "", 120, "-");
+        _teachersGrid.Rows.Add(3, "Mrs Botha", "MainInactive", false, false, "", "", 120, "-");
+        _teachersGrid.Rows.Add(4, "Ms Patel", "Open", true, true, "", 180, "", "2026-06-01|13:00-15:00;2026-06-02|08:00-10:00");
 
-        _slotsGrid.Rows.Add(1, "2026-06-01", "08:00", "10:00", "Morning", "Grade 8", "Maths", "Hall A", 2);
-        _slotsGrid.Rows.Add(2, "2026-06-01", "08:00", "10:00", "Morning", "Grade 9", "English", "Room 12", 1);
-        _slotsGrid.Rows.Add(3, "2026-06-01", "13:00", "15:00", "Afternoon", "Grade 10", "Science", "Hall B", 2);
+        _slotsGrid.Rows.Add(1, "2026-06-01", "08:00", "10:00", "Morning", "Grade 8", "Maths", "Hall A", 1, 30, 30);
+        _slotsGrid.Rows.Add(2, "2026-06-01", "08:00", "10:00", "Morning", "Grade 9", "English", "Room 12", 1, 25, 25);
+        _slotsGrid.Rows.Add(3, "2026-06-01", "13:00", "15:00", "Afternoon", "Grade 10", "Science", "Hall B", 2, 80, 40);
     }
 
     private void GenerateRoster()
@@ -172,9 +239,12 @@ public sealed class RosterForm : Form
             {
                 Id = ParseInt(row, "Id"),
                 FullName = ReadString(row, "FullName"),
+                Group = Enum.Parse<TeacherGroup>(ReadString(row, "Group"), true),
                 CanWorkMorning = ParseBool(row, "CanWorkMorning"),
                 CanWorkAfternoon = ParseBool(row, "CanWorkAfternoon"),
                 HomeSubject = EmptyToNull(ReadString(row, "HomeSubject")),
+                MinDutyMinutes = ParseNullableInt(row, "MinDutyMinutes"),
+                MaxDutyMinutes = ParseNullableInt(row, "MaxDutyMinutes"),
                 UnavailableSlots = ParseUnavailable(ReadString(row, "Unavailable"))
             });
         }
@@ -197,7 +267,9 @@ public sealed class RosterForm : Form
                 Grade = ReadString(row, "Grade"),
                 Subject = ReadString(row, "Subject"),
                 Venue = ReadString(row, "Venue"),
-                TeachersRequired = ParseInt(row, "TeachersRequired")
+                TeachersRequired = ParseInt(row, "TeachersRequired"),
+                LearnerCount = ParseNullableInt(row, "LearnerCount"),
+                LearnersPerInvigilator = ParseNullableInt(row, "LearnersPerInvigilator")
             });
         }
         return list;
@@ -211,6 +283,12 @@ public sealed class RosterForm : Form
 
     private static bool ParseBool(DataGridViewRow row, string column)
         => row.Cells[column].Value is bool b ? b : bool.Parse(ReadString(row, column));
+
+    private static int? ParseNullableInt(DataGridViewRow row, string column)
+    {
+        var value = ReadString(row, column);
+        return string.IsNullOrWhiteSpace(value) ? null : int.Parse(value);
+    }
 
     private static string? EmptyToNull(string value) => string.IsNullOrWhiteSpace(value) ? null : value;
 

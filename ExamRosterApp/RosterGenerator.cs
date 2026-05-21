@@ -5,12 +5,13 @@ public sealed class RosterGenerator
     public RosterResult GenerateRoster(List<Teacher> teachers, List<ExamDutySlot> slots)
     {
         var result = new RosterResult();
-        var slotById = slots.ToDictionary(s => s.Id);
+        var normalizedSlots = slots.Select(NormalizeSlotRules).ToList();
+        var slotById = normalizedSlots.ToDictionary(s => s.Id);
         var stats = teachers.ToDictionary(
             t => t.Id,
             t => new TeacherDutyStats { TeacherId = t.Id });
 
-        var orderedSlots = slots
+        var orderedSlots = normalizedSlots
             .OrderByDescending(GetDifficulty)
             .ThenBy(s => s.Date)
             .ThenBy(s => s.StartTime)
@@ -48,6 +49,37 @@ public sealed class RosterGenerator
         return result;
     }
 
+    private static ExamDutySlot NormalizeSlotRules(ExamDutySlot slot)
+    {
+        var isLowerGrade = slot.Grade.Contains("8", StringComparison.OrdinalIgnoreCase)
+            || slot.Grade.Contains("9", StringComparison.OrdinalIgnoreCase);
+
+        var teachersRequired = isLowerGrade
+            ? 1
+            : slot.TeachersRequired;
+
+        if (slot.LearnerCount is > 0 && slot.LearnersPerInvigilator is > 0)
+        {
+            var byCount = (int)Math.Ceiling((double)slot.LearnerCount.Value / slot.LearnersPerInvigilator.Value);
+            teachersRequired = Math.Max(teachersRequired, byCount);
+        }
+
+        return new ExamDutySlot
+        {
+            Id = slot.Id,
+            Date = slot.Date,
+            StartTime = slot.StartTime,
+            EndTime = slot.EndTime,
+            ShiftType = slot.ShiftType,
+            Grade = slot.Grade,
+            Subject = slot.Subject,
+            Venue = slot.Venue,
+            LearnerCount = slot.LearnerCount,
+            LearnersPerInvigilator = slot.LearnersPerInvigilator,
+            TeachersRequired = Math.Max(1, teachersRequired)
+        };
+    }
+
     private static int GetDifficulty(ExamDutySlot slot)
         => slot.TeachersRequired * 10 + slot.DurationMinutes;
 
@@ -63,9 +95,23 @@ public sealed class RosterGenerator
         if (slot.ShiftType == ShiftType.Afternoon && !teacher.CanWorkAfternoon)
             return false;
 
+        if (teacher.Group == TeacherGroup.MainInactive)
+            return false;
+
         if (!string.IsNullOrWhiteSpace(teacher.HomeSubject) &&
             teacher.HomeSubject.Equals(slot.Subject, StringComparison.OrdinalIgnoreCase))
             return false;
+
+        if (teacher.MaxDutyMinutes is not null)
+        {
+            var assignedMinutes = currentAssignments
+                .Where(a => a.TeacherId == teacher.Id)
+                .Select(a => allSlots[a.ExamDutySlotId].DurationMinutes)
+                .Sum();
+
+            if (assignedMinutes + slot.DurationMinutes > teacher.MaxDutyMinutes.Value)
+                return false;
+        }
 
         var overlapsAssignment = currentAssignments
             .Where(a => a.TeacherId == teacher.Id)
@@ -86,6 +132,15 @@ public sealed class RosterGenerator
     private static int CalculateTeacherScore(Teacher teacher, ExamDutySlot slot, TeacherDutyStats stats)
     {
         var score = stats.TotalMinutes;
+
+        if (teacher.MinDutyMinutes is not null && stats.TotalMinutes < teacher.MinDutyMinutes.Value)
+        {
+            score -= 100;
+            score -= (teacher.MinDutyMinutes.Value - stats.TotalMinutes) / 10;
+        }
+
+        if (teacher.Group == TeacherGroup.SecondaryNonPriority)
+            score += 150;
 
         score += slot.ShiftType switch
         {
