@@ -362,8 +362,13 @@ public sealed class RosterForm : Form
             if (saveDialog.ShowDialog() != DialogResult.OK)
                 return;
 
+            var delimiter = CultureInfo.CurrentCulture.TextInfo.ListSeparator;
             var csv = new StringBuilder();
-            csv.AppendLine("Teacher,Date,Start,End,Shift,Grade,Subject,Venue");
+            csv.AppendLine(string.Join(delimiter, new[]
+            {
+                Csv("Teacher", delimiter), Csv("Date", delimiter), Csv("Start", delimiter), Csv("End", delimiter),
+                Csv("Shift", delimiter), Csv("Grade", delimiter), Csv("Subject", delimiter), Csv("Venue", delimiter)
+            }));
 
             foreach (var assignment in result.Assignments
                          .OrderBy(a => teacherById[a.TeacherId].FullName)
@@ -372,15 +377,15 @@ public sealed class RosterForm : Form
             {
                 var teacher = teacherById[assignment.TeacherId];
                 var slot = slotById[assignment.ExamDutySlotId];
-                csv.AppendLine(string.Join(",", new[]
+                csv.AppendLine(string.Join(delimiter, new[]
                 {
-                    Csv(teacher.FullName), Csv(slot.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
-                    Csv(slot.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture)), Csv(slot.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture)),
-                    Csv(slot.ShiftType.ToString()), Csv(slot.Grade), Csv(slot.Subject), Csv(slot.Venue)
+                    Csv(teacher.FullName, delimiter), Csv(slot.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), delimiter),
+                    Csv(slot.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture), delimiter), Csv(slot.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture), delimiter),
+                    Csv(slot.ShiftType.ToString(), delimiter), Csv(slot.Grade, delimiter), Csv(slot.Subject, delimiter), Csv(slot.Venue, delimiter)
                 }));
             }
 
-            File.WriteAllText(saveDialog.FileName, csv.ToString(), Encoding.UTF8);
+            File.WriteAllText(saveDialog.FileName, csv.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
             MessageBox.Show($"Exported roster to {saveDialog.FileName}", "Export complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
@@ -389,10 +394,15 @@ public sealed class RosterForm : Form
         }
     }
 
-    private static string Csv(string value)
+    private static string Csv(string value, string delimiter)
     {
-        var escaped = value.Replace(""", """");
-        return $""{escaped}"";
+        var escaped = value.Replace("\"", "\"\"");
+        var needsQuotes = escaped.Contains(delimiter, StringComparison.Ordinal)
+            || escaped.Contains("\"", StringComparison.Ordinal)
+            || escaped.Contains("\n", StringComparison.Ordinal)
+            || escaped.Contains("\r", StringComparison.Ordinal);
+
+        return needsQuotes ? $"\"{escaped}\"" : escaped;
     }
 
     private List<Teacher> ReadTeachers()
