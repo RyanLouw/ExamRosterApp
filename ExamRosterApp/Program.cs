@@ -1,4 +1,5 @@
 using System.Text;
+using System.Globalization;
 using System.Data.SqlClient;
 using System.Windows.Forms;
 using ExamRosterApp.Rostering;
@@ -38,16 +39,19 @@ public sealed class RosterForm : Form
         var addSlotButton = new Button { Text = "Add Exam Slot", AutoSize = true };
         var generateButton = new Button { Text = "Generate Roster", AutoSize = true };
         var clearButton = new Button { Text = "Clear Output", AutoSize = true };
+        var exportButton = new Button { Text = "Export to Excel (CSV)", AutoSize = true };
 
         addTeacherButton.Click += (_, _) => _teachersGrid.Rows.Add();
         addSlotButton.Click += (_, _) => _slotsGrid.Rows.Add();
         generateButton.Click += (_, _) => GenerateRoster();
         clearButton.Click += (_, _) => _outputBox.Clear();
+        exportButton.Click += (_, _) => ExportRosterCsv();
 
         buttonPanel.Controls.Add(addTeacherButton);
         buttonPanel.Controls.Add(addSlotButton);
         buttonPanel.Controls.Add(generateButton);
         buttonPanel.Controls.Add(clearButton);
+        buttonPanel.Controls.Add(exportButton);
         root.Controls.Add(buttonPanel, 0, 0);
 
         ConfigureTeacherGrid();
@@ -66,15 +70,15 @@ public sealed class RosterForm : Form
         root.Controls.Add(outputGroup, 0, 3);
 
         Controls.Add(root);
-        LoadTeachersFromDatabaseOrSeed();
+        LoadDataFromDatabaseOrShowStatus();
     }
 
-    private void LoadTeachersFromDatabaseOrSeed()
+    private void LoadDataFromDatabaseOrShowStatus()
     {
-        var connectionString = Environment.GetEnvironmentVariable("EXAMROSTER_DB_CONNECTION");
+        var connectionString = ResolveConnectionString();
         if (string.IsNullOrWhiteSpace(connectionString))
         {
-            SeedSampleData();
+            _outputBox.Text = "No database connection string found. Set EXAMROSTER_DB_CONNECTION or ConnectionStrings__ExamDb.";
             return;
         }
 
@@ -83,8 +87,28 @@ public sealed class RosterForm : Form
             using var connection = new SqlConnection(connectionString);
             connection.Open();
 
-            using var command = connection.CreateCommand();
-            command.CommandText = @"
+            LoadTeachers(connection);
+            LoadExamSlots(connection);
+
+            _outputBox.Text = $"Loaded {_teachersGrid.Rows.Cast<DataGridViewRow>().Count(r => !r.IsNewRow)} teachers and {_slotsGrid.Rows.Cast<DataGridViewRow>().Count(r => !r.IsNewRow)} exam slots from the database.";
+        }
+        catch (Exception ex)
+        {
+            _outputBox.Text = $"Database load failed: {ex.Message}";
+        }
+    }
+
+    private static string? ResolveConnectionString()
+    {
+        return Environment.GetEnvironmentVariable("EXAMROSTER_DB_CONNECTION")
+            ?? Environment.GetEnvironmentVariable("ConnectionStrings__ExamDb")
+            ?? Environment.GetEnvironmentVariable("ConnectionStrings:ExamDb");
+    }
+
+    private void LoadTeachers(SqlConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
                 SELECT TeacherId, FullName, CanWorkMorning, CanWorkAfternoon, IsActive,
                        ISNULL(TeacherGroupId, 1) AS TeacherGroupId,
                        MinDutyMinutes, MaxDutyMinutes
@@ -92,36 +116,122 @@ public sealed class RosterForm : Form
                 WHERE IsActive = 1
                 ORDER BY FullName;";
 
-            using var reader = command.ExecuteReader();
-            var loadedAny = false;
-
-            while (reader.Read())
-            {
-                loadedAny = true;
-                var groupId = Convert.ToInt32(reader["TeacherGroupId"]);
-                var groupName = Enum.IsDefined(typeof(TeacherGroup), groupId)
-                    ? ((TeacherGroup)groupId).ToString()
-                    : TeacherGroup.Open.ToString();
-
-                _teachersGrid.Rows.Add(
-                    Convert.ToInt32(reader["TeacherId"]),
-                    reader["FullName"].ToString() ?? string.Empty,
-                    groupName,
-                    Convert.ToBoolean(reader["CanWorkMorning"]),
-                    Convert.ToBoolean(reader["CanWorkAfternoon"]),
-                    string.Empty,
-                    reader["MinDutyMinutes"] is DBNull ? string.Empty : reader["MinDutyMinutes"],
-                    reader["MaxDutyMinutes"] is DBNull ? string.Empty : reader["MaxDutyMinutes"],
-                    "-");
-            }
-
-            if (!loadedAny)
-                SeedSampleData();
-        }
-        catch
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
         {
-            SeedSampleData();
+            var groupId = Convert.ToInt32(reader["TeacherGroupId"]);
+            var groupName = Enum.IsDefined(typeof(TeacherGroup), groupId)
+                ? ((TeacherGroup)groupId).ToString()
+                : TeacherGroup.Open.ToString();
+
+            _teachersGrid.Rows.Add(
+                Convert.ToInt32(reader["TeacherId"]),
+                reader["FullName"].ToString() ?? string.Empty,
+                groupName,
+                Convert.ToBoolean(reader["CanWorkMorning"]),
+                Convert.ToBoolean(reader["CanWorkAfternoon"]),
+                string.Empty,
+                reader["MinDutyMinutes"] is DBNull ? string.Empty : reader["MinDutyMinutes"],
+                reader["MaxDutyMinutes"] is DBNull ? string.Empty : reader["MaxDutyMinutes"],
+                "-");
         }
+    }
+
+    private void LoadExamSlots(SqlConnection connection)
+    {
+        var loadedRows = LoadExamDutySlots(connection);
+        if (loadedRows > 0)
+            return;
+
+        LoadExamSlotsFromExamPaper(connection);
+    }
+
+    private int LoadExamDutySlots(SqlConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+                SELECT ExamDutySlotId, [Date], StartTime, EndTime, ShiftTypeId,
+                       Grade, Subject, Venue, TeachersRequired, LearnerCount, LearnersPerInvigilator
+                FROM tr.ExamDutySlot
+                WHERE IsActive = 1
+                ORDER BY [Date], StartTime, Venue;";
+
+        using var reader = command.ExecuteReader();
+        var loaded = 0;
+
+        while (reader.Read())
+        {
+            var shiftId = Convert.ToInt32(reader["ShiftTypeId"]);
+            var shiftName = Enum.IsDefined(typeof(ShiftType), shiftId)
+                ? ((ShiftType)shiftId).ToString()
+                : ShiftType.Morning.ToString();
+
+            _slotsGrid.Rows.Add(
+                Convert.ToInt32(reader["ExamDutySlotId"]),
+                ReadDateOnly(reader["Date"]).ToString("yyyy-MM-dd"),
+                ReadTimeOnly(reader["StartTime"]).ToString("HH:mm"),
+                ReadTimeOnly(reader["EndTime"]).ToString("HH:mm"),
+                shiftName,
+                reader["Grade"].ToString() ?? string.Empty,
+                reader["Subject"].ToString() ?? string.Empty,
+                reader["Venue"].ToString() ?? string.Empty,
+                Convert.ToInt32(reader["TeachersRequired"]),
+                reader["LearnerCount"] is DBNull ? string.Empty : reader["LearnerCount"],
+                reader["LearnersPerInvigilator"] is DBNull ? string.Empty : reader["LearnersPerInvigilator"]);
+
+            loaded++;
+        }
+
+        return loaded;
+    }
+
+    private void LoadExamSlotsFromExamPaper(SqlConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+                SELECT ExamPaperId, [Date], StartTime, EndTime, ShiftTypeId,
+                       Grade, Subject
+                FROM tr.ExamPaper
+                WHERE IsActive = 1 AND IsSchoolHoliday = 0
+                ORDER BY [Date], StartTime, Grade;";
+
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            var shiftId = Convert.ToInt32(reader["ShiftTypeId"]);
+            var shiftName = Enum.IsDefined(typeof(ShiftType), shiftId)
+                ? ((ShiftType)shiftId).ToString()
+                : ShiftType.Morning.ToString();
+
+            _slotsGrid.Rows.Add(
+                Convert.ToInt32(reader["ExamPaperId"]),
+                ReadDateOnly(reader["Date"]).ToString("yyyy-MM-dd"),
+                ReadTimeOnly(reader["StartTime"]).ToString("HH:mm"),
+                ReadTimeOnly(reader["EndTime"]).ToString("HH:mm"),
+                shiftName,
+                reader["Grade"].ToString() ?? string.Empty,
+                reader["Subject"].ToString() ?? string.Empty,
+                "TBD",
+                1,
+                string.Empty,
+                string.Empty);
+        }
+    }
+
+
+    private static DateOnly ReadDateOnly(object value)
+    {
+        if (value is DateOnly d) return d;
+        if (value is DateTime dt) return DateOnly.FromDateTime(dt);
+        return DateOnly.Parse(value.ToString() ?? throw new InvalidOperationException("Date value is null."));
+    }
+
+    private static TimeOnly ReadTimeOnly(object value)
+    {
+        if (value is TimeOnly t) return t;
+        if (value is TimeSpan ts) return TimeOnly.FromTimeSpan(ts);
+        if (value is DateTime dt) return TimeOnly.FromDateTime(dt);
+        return TimeOnly.Parse(value.ToString() ?? throw new InvalidOperationException("Time value is null."));
     }
 
     private void ConfigureTeacherGrid()
@@ -168,20 +278,8 @@ public sealed class RosterForm : Form
         _slotsGrid.Columns.Add("Subject", "Subject");
         _slotsGrid.Columns.Add("Venue", "Venue");
         _slotsGrid.Columns.Add("TeachersRequired", "Teachers Required");
-        _slotsGrid.Columns.Add("LearnerCount", "Learner Count (optional)");
-        _slotsGrid.Columns.Add("LearnersPerInvigilator", "Learners per Invigilator (optional)");
-    }
-
-    private void SeedSampleData()
-    {
-        _teachersGrid.Rows.Add(1, "Mrs Smith", "Open", true, true, "Maths", 120, 240, "2026-06-01|10:00-11:00");
-        _teachersGrid.Rows.Add(2, "Mr Jones", "SecondaryNonPriority", true, false, "", "", 120, "-");
-        _teachersGrid.Rows.Add(3, "Mrs Botha", "MainInactive", false, false, "", "", 120, "-");
-        _teachersGrid.Rows.Add(4, "Ms Patel", "Open", true, true, "", 180, "", "2026-06-01|13:00-15:00;2026-06-02|08:00-10:00");
-
-        _slotsGrid.Rows.Add(1, "2026-06-01", "08:00", "10:00", "Morning", "Grade 8", "Maths", "Hall A", 1, 30, 30);
-        _slotsGrid.Rows.Add(2, "2026-06-01", "08:00", "10:00", "Morning", "Grade 9", "English", "Room 12", 1, 25, 25);
-        _slotsGrid.Rows.Add(3, "2026-06-01", "13:00", "15:00", "Afternoon", "Grade 10", "Science", "Hall B", 2, 80, 40);
+        _slotsGrid.Columns.Add("IntervalCount", "Interval Count (optional)");
+        _slotsGrid.Columns.Add("TeachersPerInterval", "Teachers per Interval (optional)");
     }
 
     private void GenerateRoster()
@@ -190,6 +288,7 @@ public sealed class RosterForm : Form
         {
             var teachers = ReadTeachers();
             var slots = ReadSlots();
+            ShowJuniorGradeHintIfNeeded(slots);
 
             var generator = new RosterGenerator();
             var result = generator.GenerateRoster(teachers, slots);
@@ -198,8 +297,8 @@ public sealed class RosterForm : Form
             var teacherById = teachers.ToDictionary(t => t.Id);
 
             var sb = new StringBuilder();
-            sb.AppendLine("Date       Time        Shift      Venue      Teacher");
-            sb.AppendLine("------------------------------------------------------");
+            sb.AppendLine("Date       Time        Shift      Subject                 Venue      Teacher");
+            sb.AppendLine("--------------------------------------------------------------------------------");
 
             foreach (var assignment in result.Assignments
                          .OrderBy(a => slotById[a.ExamDutySlotId].Date)
@@ -208,7 +307,7 @@ public sealed class RosterForm : Form
             {
                 var slot = slotById[assignment.ExamDutySlotId];
                 var teacher = teacherById[assignment.TeacherId];
-                sb.AppendLine($"{slot.Date:yyyy-MM-dd} {slot.StartTime:HH:mm}-{slot.EndTime:HH:mm} {slot.ShiftType,-10} {slot.Venue,-10} {teacher.FullName}");
+                sb.AppendLine($"{slot.Date:yyyy-MM-dd} {slot.StartTime:HH:mm}-{slot.EndTime:HH:mm} {slot.ShiftType,-10} {slot.Subject,-22} {slot.Venue,-10} {teacher.FullName}");
             }
 
             if (result.Warnings.Count > 0)
@@ -227,6 +326,73 @@ public sealed class RosterForm : Form
         {
             MessageBox.Show($"Please fix input data: {ex.Message}", "Invalid input", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+    }
+
+    private void ShowJuniorGradeHintIfNeeded(List<ExamDutySlot> slots)
+    {
+        if (slots.Any(s => s.Grade.Contains("Grade 8", StringComparison.OrdinalIgnoreCase)
+            || s.Grade.Contains("Grade 9", StringComparison.OrdinalIgnoreCase)))
+        {
+            MessageBox.Show(
+                "Reminder: Grade 8 and Grade 9 usually require 1 teacher per test.",
+                "Grade 8/9 Hint",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+    }
+
+    private void ExportRosterCsv()
+    {
+        try
+        {
+            var teachers = ReadTeachers();
+            var slots = ReadSlots();
+            var generator = new RosterGenerator();
+            var result = generator.GenerateRoster(teachers, slots);
+
+            var slotById = slots.ToDictionary(s => s.Id);
+            var teacherById = teachers.ToDictionary(t => t.Id);
+
+            using var saveDialog = new SaveFileDialog
+            {
+                Filter = "CSV files (*.csv)|*.csv",
+                FileName = $"exam-roster-{DateTime.Now:yyyyMMdd-HHmm}.csv"
+            };
+
+            if (saveDialog.ShowDialog() != DialogResult.OK)
+                return;
+
+            var csv = new StringBuilder();
+            csv.AppendLine("Teacher,Date,Start,End,Shift,Grade,Subject,Venue");
+
+            foreach (var assignment in result.Assignments
+                         .OrderBy(a => teacherById[a.TeacherId].FullName)
+                         .ThenBy(a => slotById[a.ExamDutySlotId].Date)
+                         .ThenBy(a => slotById[a.ExamDutySlotId].StartTime))
+            {
+                var teacher = teacherById[assignment.TeacherId];
+                var slot = slotById[assignment.ExamDutySlotId];
+                csv.AppendLine(string.Join(",", new[]
+                {
+                    Csv(teacher.FullName), Csv(slot.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+                    Csv(slot.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture)), Csv(slot.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture)),
+                    Csv(slot.ShiftType.ToString()), Csv(slot.Grade), Csv(slot.Subject), Csv(slot.Venue)
+                }));
+            }
+
+            File.WriteAllText(saveDialog.FileName, csv.ToString(), Encoding.UTF8);
+            MessageBox.Show($"Exported roster to {saveDialog.FileName}", "Export complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Export failed: {ex.Message}", "Export error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private static string Csv(string value)
+    {
+        var escaped = value.Replace(""", """");
+        return $""{escaped}"";
     }
 
     private List<Teacher> ReadTeachers()
@@ -268,8 +434,8 @@ public sealed class RosterForm : Form
                 Subject = ReadString(row, "Subject"),
                 Venue = ReadString(row, "Venue"),
                 TeachersRequired = ParseInt(row, "TeachersRequired"),
-                LearnerCount = ParseNullableInt(row, "LearnerCount"),
-                LearnersPerInvigilator = ParseNullableInt(row, "LearnersPerInvigilator")
+                LearnerCount = ParseNullableInt(row, "IntervalCount"),
+                LearnersPerInvigilator = ParseNullableInt(row, "TeachersPerInterval")
             });
         }
         return list;
