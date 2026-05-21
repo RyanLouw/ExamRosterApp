@@ -13,16 +13,25 @@ public sealed class RosterGenerator
     {
         RosterResult? best = null;
         var attempts = 20;
+        var runSummaries = new List<string>();
 
         for (var attempt = 1; attempt <= attempts; attempt++)
         {
             var result = GenerateSingleRun(teachers, slots, attempt);
+            runSummaries.Add($"attempt={attempt}, spread={result.FairnessSpreadMinutes}, warnings={result.Warnings.Count}, assignments={result.Assignments.Count}");
             if (best is null
                 || result.FairnessSpreadMinutes < best.FairnessSpreadMinutes
                 || (result.FairnessSpreadMinutes == best.FairnessSpreadMinutes && result.Warnings.Count < best.Warnings.Count))
             {
                 best = result;
             }
+        }
+
+        if (best is not null)
+        {
+            best.Diagnostics.Insert(0, "=== Multi-run attempt summary ===");
+            foreach (var line in runSummaries)
+                best.Diagnostics.Insert(1, line);
         }
 
         return best ?? new RosterResult();
@@ -107,6 +116,9 @@ public sealed class RosterGenerator
             $"Fairness math: totalAssignedMinutes={totalAssignedMinutes}, teachers={teachers.Count}, " +
             $"averageMinutes={avgMinutes:F2}, minMinutes={minMinutes}, maxMinutes={maxMinutes}, diff={maxMinutes - minMinutes}.");
         result.Diagnostics.Add($"Final fairness spread minutes: min={totals.Values.Min()}, max={totals.Values.Max()}, diff={totals.Values.Max() - totals.Values.Min()}");
+        result.Diagnostics.Add("=== Teacher totals (minutes) ===");
+        foreach (var kv in totals.OrderBy(k => k.Key))
+            result.Diagnostics.Add($"teacherId={kv.Key}, totalMinutes={kv.Value}");
         return result;
     }
 

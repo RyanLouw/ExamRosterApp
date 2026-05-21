@@ -1,6 +1,7 @@
 using System.Text;
 using System.Globalization;
 using System.Data.SqlClient;
+using System.Text.Json;
 using System.Windows.Forms;
 using ExamRosterApp.Rostering;
 
@@ -438,14 +439,27 @@ public sealed class RosterForm : Form
 
         using var saveDialog = new SaveFileDialog
         {
-            Filter = "Text files (*.txt)|*.txt",
-            FileName = $"roster-diagnostics-{DateTime.Now:yyyyMMdd-HHmm}.txt"
+            Filter = "JSON files (*.json)|*.json|Text files (*.txt)|*.txt",
+            FileName = $"roster-diagnostics-{DateTime.Now:yyyyMMdd-HHmm}.json"
         };
 
         if (saveDialog.ShowDialog() != DialogResult.OK)
             return;
 
-        File.WriteAllLines(saveDialog.FileName, _latestDiagnostics, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        if (saveDialog.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+        {
+            var payload = new
+            {
+                exportedAtUtc = DateTime.UtcNow,
+                diagnostics = _latestDiagnostics
+            };
+            var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(saveDialog.FileName, json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        }
+        else
+        {
+            File.WriteAllLines(saveDialog.FileName, _latestDiagnostics, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        }
         MessageBox.Show($"Saved diagnostics to {saveDialog.FileName}", "Logs exported", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
