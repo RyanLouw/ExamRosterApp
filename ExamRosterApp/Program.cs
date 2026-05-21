@@ -164,9 +164,9 @@ public sealed class RosterForm : Form
 
             _slotsGrid.Rows.Add(
                 Convert.ToInt32(reader["ExamDutySlotId"]),
-                DateOnly.FromDateTime(Convert.ToDateTime(reader["Date"])).ToString("yyyy-MM-dd"),
-                TimeOnly.FromDateTime(Convert.ToDateTime(reader["StartTime"])).ToString("HH:mm"),
-                TimeOnly.FromDateTime(Convert.ToDateTime(reader["EndTime"])).ToString("HH:mm"),
+                ReadDateOnly(reader["Date"]).ToString("yyyy-MM-dd"),
+                ReadTimeOnly(reader["StartTime"]).ToString("HH:mm"),
+                ReadTimeOnly(reader["EndTime"]).ToString("HH:mm"),
                 shiftName,
                 reader["Grade"].ToString() ?? string.Empty,
                 reader["Subject"].ToString() ?? string.Empty,
@@ -201,9 +201,9 @@ public sealed class RosterForm : Form
 
             _slotsGrid.Rows.Add(
                 Convert.ToInt32(reader["ExamPaperId"]),
-                DateOnly.FromDateTime(Convert.ToDateTime(reader["Date"])).ToString("yyyy-MM-dd"),
-                TimeOnly.FromDateTime(Convert.ToDateTime(reader["StartTime"])).ToString("HH:mm"),
-                TimeOnly.FromDateTime(Convert.ToDateTime(reader["EndTime"])).ToString("HH:mm"),
+                ReadDateOnly(reader["Date"]).ToString("yyyy-MM-dd"),
+                ReadTimeOnly(reader["StartTime"]).ToString("HH:mm"),
+                ReadTimeOnly(reader["EndTime"]).ToString("HH:mm"),
                 shiftName,
                 reader["Grade"].ToString() ?? string.Empty,
                 reader["Subject"].ToString() ?? string.Empty,
@@ -212,6 +212,22 @@ public sealed class RosterForm : Form
                 string.Empty,
                 string.Empty);
         }
+    }
+
+
+    private static DateOnly ReadDateOnly(object value)
+    {
+        if (value is DateOnly d) return d;
+        if (value is DateTime dt) return DateOnly.FromDateTime(dt);
+        return DateOnly.Parse(value.ToString() ?? throw new InvalidOperationException("Date value is null."));
+    }
+
+    private static TimeOnly ReadTimeOnly(object value)
+    {
+        if (value is TimeOnly t) return t;
+        if (value is TimeSpan ts) return TimeOnly.FromTimeSpan(ts);
+        if (value is DateTime dt) return TimeOnly.FromDateTime(dt);
+        return TimeOnly.Parse(value.ToString() ?? throw new InvalidOperationException("Time value is null."));
     }
 
     private void ConfigureTeacherGrid()
