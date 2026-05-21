@@ -85,12 +85,12 @@ public sealed class RosterForm : Form
 
             using var command = connection.CreateCommand();
             command.CommandText = @"
-SELECT TeacherId, FullName, CanWorkMorning, CanWorkAfternoon, IsActive,
-       ISNULL(TeacherGroupId, 1) AS TeacherGroupId,
-       MinDutyMinutes, MaxDutyMinutes
-FROM tr.Teacher
-WHERE IsActive = 1
-ORDER BY FullName;";
+                SELECT TeacherId, FullName, CanWorkMorning, CanWorkAfternoon, IsActive,
+                       ISNULL(TeacherGroupId, 1) AS TeacherGroupId,
+                       MinDutyMinutes, MaxDutyMinutes
+                FROM tr.Teacher
+                WHERE IsActive = 1
+                ORDER BY FullName;";
 
             using var reader = command.ExecuteReader();
             var loadedAny = false;

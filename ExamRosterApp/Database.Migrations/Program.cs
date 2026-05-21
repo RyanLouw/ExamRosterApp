@@ -88,7 +88,7 @@ public static class Program
             {
                 rb.AddSqlServer()
                   .WithGlobalConnectionString(connection)
-                  .ScanIn(typeof(Program).Assembly)
+                  .ScanIn(typeof(_0001_Schema01).Assembly)
                   .For.Migrations();
             })
             .AddLogging(lb =>
@@ -99,7 +99,6 @@ public static class Program
             {
                 opt.Tags = [migratorTag.Tag];
             });
-
         return builder.Services.BuildServiceProvider(validateScopes: true);
     }
 
