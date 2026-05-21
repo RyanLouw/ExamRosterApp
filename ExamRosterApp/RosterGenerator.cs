@@ -26,9 +26,13 @@ public sealed class RosterGenerator
                     .Select(t => new
                     {
                         Teacher = t,
-                        Score = CalculateTeacherScore(t, slot, stats[t.Id])
+                        Score = CalculateTeacherScore(t, slot, stats[t.Id]),
+                        ProjectedMinutes = stats[t.Id].TotalMinutes + slot.DurationMinutes,
+                        ProjectedDuties = stats[t.Id].TotalDuties + 1
                     })
-                    .OrderBy(x => x.Score)
+                    .OrderBy(x => x.ProjectedMinutes)
+                    .ThenBy(x => x.ProjectedDuties)
+                    .ThenBy(x => x.Score)
                     .ThenBy(x => x.Teacher.FullName, StringComparer.InvariantCulture)
                     .ToList();
 
@@ -182,31 +186,84 @@ public sealed class RosterGenerator
         List<Teacher> teachers,
         IReadOnlyDictionary<int, ExamDutySlot> slots)
     {
-        for (var pass = 0; pass < 6; pass++)
+        for (var pass = 0; pass < 40; pass++)
         {
             var totals = teachers.ToDictionary(t => t.Id, t => assignments
                 .Where(a => a.TeacherId == t.Id)
                 .Select(a => slots[a.ExamDutySlotId].DurationMinutes)
                 .Sum());
 
-            var mostLoaded = teachers.OrderByDescending(t => totals[t.Id]).First();
-            var leastLoaded = teachers.OrderBy(t => totals[t.Id]).First();
-
-            if (totals[mostLoaded.Id] - totals[leastLoaded.Id] <= 60)
+            var maxMinutes = totals.Values.Max();
+            var minMinutes = totals.Values.Min();
+            if (maxMinutes - minMinutes <= 60)
                 return;
 
-            var candidate = assignments
-                .Where(a => a.TeacherId == mostLoaded.Id)
+            var improved = TryBestFairnessMove(assignments, teachers, slots, totals);
+            if (!improved)
+                return;
+        }
+    }
+
+    private static bool TryBestFairnessMove(
+        List<DutyAssignment> assignments,
+        List<Teacher> teachers,
+        IReadOnlyDictionary<int, ExamDutySlot> slots,
+        IReadOnlyDictionary<int, int> totals)
+    {
+        var baseSpread = totals.Values.Max() - totals.Values.Min();
+        DutyAssignment? bestAssignment = null;
+        Teacher? bestTargetTeacher = null;
+        var bestSpread = baseSpread;
+
+        var overloadedTeachers = teachers
+            .OrderByDescending(t => totals[t.Id])
+            .Take(12)
+            .ToList();
+
+        var underloadedTeachers = teachers
+            .OrderBy(t => totals[t.Id])
+            .Take(24)
+            .ToList();
+
+        foreach (var sourceTeacher in overloadedTeachers)
+        {
+            var sourceAssignments = assignments
+                .Where(a => a.TeacherId == sourceTeacher.Id)
                 .Select(a => new { Assignment = a, Slot = slots[a.ExamDutySlotId] })
                 .OrderByDescending(x => x.Slot.DurationMinutes)
-                .FirstOrDefault(x => CanSwapToTeacher(leastLoaded, x.Slot, assignments, slots, x.Assignment));
+                .ToList();
 
-            if (candidate is null)
-                return;
+            foreach (var item in sourceAssignments)
+            {
+                foreach (var targetTeacher in underloadedTeachers)
+                {
+                    if (targetTeacher.Id == sourceTeacher.Id)
+                        continue;
 
-            assignments.Remove(candidate.Assignment);
-            assignments.Add(new DutyAssignment { TeacherId = leastLoaded.Id, ExamDutySlotId = candidate.Assignment.ExamDutySlotId });
+                    if (!CanSwapToTeacher(targetTeacher, item.Slot, assignments, slots, item.Assignment))
+                        continue;
+
+                    var proposed = totals.ToDictionary(k => k.Key, v => v.Value);
+                    proposed[sourceTeacher.Id] -= item.Slot.DurationMinutes;
+                    proposed[targetTeacher.Id] += item.Slot.DurationMinutes;
+
+                    var proposedSpread = proposed.Values.Max() - proposed.Values.Min();
+                    if (proposedSpread < bestSpread)
+                    {
+                        bestSpread = proposedSpread;
+                        bestAssignment = item.Assignment;
+                        bestTargetTeacher = targetTeacher;
+                    }
+                }
+            }
         }
+
+        if (bestAssignment is null || bestTargetTeacher is null || bestSpread >= baseSpread)
+            return false;
+
+        assignments.Remove(bestAssignment);
+        assignments.Add(new DutyAssignment { TeacherId = bestTargetTeacher.Id, ExamDutySlotId = bestAssignment.ExamDutySlotId });
+        return true;
     }
 
     private static bool CanSwapToTeacher(
