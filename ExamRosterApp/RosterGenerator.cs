@@ -5,7 +5,20 @@ public sealed class RosterGenerator
     public RosterResult GenerateRoster(List<Teacher> teachers, List<ExamDutySlot> slots)
     {
         var result = new RosterResult();
-        var normalizedSlots = slots.Select(NormalizeSlotRules).ToList();
+        var normalizedSlots = new List<ExamDutySlot>(slots.Count);
+        foreach (var slot in slots)
+        {
+            var normalized = NormalizeSlotRules(slot);
+            normalizedSlots.Add(normalized);
+
+            if (normalized.TeachersRequired != slot.TeachersRequired)
+            {
+                result.Diagnostics.Add(
+                    $"Normalized slot {slot.Id}: teachersRequired {slot.TeachersRequired} -> {normalized.TeachersRequired} " +
+                    $"(grade={slot.Grade}, intervalCount={slot.LearnerCount?.ToString() ?? "null"}, teachersPerInterval={slot.LearnersPerInvigilator?.ToString() ?? "null"}).");
+            }
+        }
+
         var slotById = normalizedSlots.ToDictionary(s => s.Id);
         var stats = teachers.ToDictionary(
             t => t.Id,
@@ -56,6 +69,13 @@ public sealed class RosterGenerator
         var totals = teachers.ToDictionary(
             t => t.Id,
             t => result.Assignments.Where(a => a.TeacherId == t.Id).Select(a => slotById[a.ExamDutySlotId].DurationMinutes).Sum());
+        var totalAssignedMinutes = totals.Values.Sum();
+        var avgMinutes = teachers.Count == 0 ? 0 : totalAssignedMinutes / (double)teachers.Count;
+        var maxMinutes = totals.Values.DefaultIfEmpty(0).Max();
+        var minMinutes = totals.Values.DefaultIfEmpty(0).Min();
+        result.Diagnostics.Add(
+            $"Fairness math: totalAssignedMinutes={totalAssignedMinutes}, teachers={teachers.Count}, " +
+            $"averageMinutes={avgMinutes:F2}, minMinutes={minMinutes}, maxMinutes={maxMinutes}, diff={maxMinutes - minMinutes}.");
         result.Diagnostics.Add($"Final fairness spread minutes: min={totals.Values.Min()}, max={totals.Values.Max()}, diff={totals.Values.Max() - totals.Values.Min()}");
         return result;
     }
